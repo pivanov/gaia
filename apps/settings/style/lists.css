@@ -20,7 +20,7 @@ ul li {
 
 ul li.active,
 ul li:active {
-  background-color: #ddf;
+  background-color: #b1f1ff;
   color: #222;
 }
 
