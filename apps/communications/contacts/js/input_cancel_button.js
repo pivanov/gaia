@@ -59,7 +59,10 @@ var InputCancelButton = (function inputCancelButton() {
     var clearButton = parentElement.querySelector('[type=reset]');
     clearButton.classList.remove('hide');
 
-    clearButton.addEventListener('mousedown', function removeText() {
+    clearButton.addEventListener('mousedown', function removeText(evt) {
+      //needed to prevent the reset of all form element
+      evt.preventDefault();
+
       input.value = '';
       var event = new CustomEvent('cancelInput');
       document.dispatchEvent(event);
