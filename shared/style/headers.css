@@ -88,7 +88,7 @@ section[role="region"] > header:first-child menu[type="toolbar"] {
 
 section[role="region"] > header:first-child menu[type="toolbar"] a,
 section[role="region"] > header:first-child menu[type="toolbar"] button {
-  height: 5rem;
+  height: 100%;
   min-width: 5rem;
   width: auto;
   margin-bottom: 0;
@@ -172,7 +172,7 @@ section[role="region"] > header:first-child .icon {
   font-size: 0;
   overflow: hidden;
   position: relative;
-  height: 4.9rem;
+  height: 100%;
 }
 
 section[role="region"] > header:first-child .icon.icon-add {
@@ -221,12 +221,12 @@ section[role="region"] > header:first-child > a {
   position: absolute;
   left: 0;
   width: 5rem;
-  height: 5rem;
+  height: 100%;
   background: url(headers/images/ui/separator-large.png) no-repeat 2rem center;
   overflow: hidden;
 }
 
-section[role="region"] > header:first-child > button::-moz-focus-inner { 
+section[role="region"] > header:first-child > button::-moz-focus-inner {
   border: 0;
   padding: 0;
 }
@@ -237,7 +237,7 @@ section[role="region"] > header:first-child > a .icon {
   overflow: visible;
   font-size: 0;
   position: static;
-  height: 4.9rem;
+  height: 100%;
   margin: 0;
   width: 2rem;
 }
@@ -250,7 +250,7 @@ section[role="region"] > header:first-child > a .icon:after {
   top: 0;
   z-index: -1;
   width: 2rem;
-  height: 4.9rem;
+  height: 100%;
   background: #9d3d26 url(headers/images/ui/negative.png) repeat-x 0 0;
 }
 
@@ -297,7 +297,8 @@ section[role="region"].skin-dark > header:first-child > a .icon:after,
 .skin-dark section[role="region"] > header:first-child > a .icon:after,
 section[role="region"].skin-dark > header:first-child > button .icon:after,
 .skin-dark section[role="region"] > header:first-child > button .icon:after {
-  background: #26272c url(headers/images/ui/dark/negative.png) repeat-x 0 0;
+  background-image: none;
+  background-color: #1c2224;
 }
 
 section[role="region"].skin-dark > header:first-child menu[type="toolbar"] a:last-child,
