@@ -205,20 +205,28 @@ var Settings = {
       };
 
       // preset all select
-      var selects = panel.querySelectorAll('select');
-      for (var i = 0, count = selects.length; i < count; i++) {
-        var select = selects[i];
-        var key = select.name;
-        if (key && request.result[key] != undefined) {
-          var value = request.result[key];
-          var option = 'option[value="' + value + '"]';
-          var selectOption = select.querySelector(option);
-          if (selectOption) {
-            selectOption.selected = true;
+      var presetFakeSelect = function() {
+        var selects = panel.querySelectorAll('select');
+        for (var i = 0, count = selects.length; i < count; i++) {
+          var select = selects[i];
+          var key = select.name;
+          if (key && request.result[key] != undefined) {
+            var value = request.result[key];
+            var option = 'option[value="' + value + '"]';
+            var selectOption = select.querySelector(option);
+            if (selectOption) {
+              selectOption.selected = true;
+            }
           }
+          fakeSelector(select);
         }
-        fakeSelector(select);
       }
+
+      //use setTimeout because we need some time until all elements are created and filled with the necessary data
+      //for e.g. Date & Time
+      panel.onload = setTimeout(function(){
+        presetFakeSelect();
+      },500);
 
       // preset all span with data-name fields
       rule = '[data-name]:not([data-ignore])';
