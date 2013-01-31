@@ -26,6 +26,13 @@ var ApplicationsList = {
     mainButton: document.getElementById('clear-bookmarks-app')
   },
 
+  uninstallApp: {
+    dialog: document.querySelector('#appPermissions-details .ua-alert'),
+    goButton: document.querySelector('#appPermissions-details .ua-alert-ok'),
+    cancelButton: document.querySelector('#appPermissions-details .ua-alert-cancel'),
+    mainButton: document.getElementById('uninstall-app')
+  },
+
   init: function al_init() {
     var appsMgmt = navigator.mozApps.mgmt;
     appsMgmt.oninstall = this.oninstall.bind(this);
@@ -64,6 +71,21 @@ var ApplicationsList = {
       };
 
     this.bookmarksClear.mainButton.onclick = function clearBookmarksData() {
+      confirmDialog.hidden = false;
+    };
+
+    // Implement uninstall apps button and its confirm dialog
+    var confirmDialog = this.uninstallApp.dialog;
+    this.uninstallApp.goButton.onclick = function ua_confirmGoClicked(event) {
+      confirmDialog.hidden = true;
+    };
+
+    this.uninstallApp.cancelButton.onclick =
+      function ua_confirmCancelClicked(event) {
+        confirmDialog.hidden = true;
+      };
+
+    this.uninstallApp.mainButton.onclick = function uninstallApp() {
       confirmDialog.hidden = false;
     };
   },
@@ -305,8 +327,15 @@ var ApplicationsList = {
     var _ = navigator.mozL10n.get;
 
     var item = document.createElement('li');
-    var content = document.createElement('span');
+    var content = document.createElement('p');
     content.textContent = _('perm-' + perm.replace(':', '-'));
+
+    var fakeSelectHolder = document.createElement('p');
+    fakeSelectHolder.className = 'fake-select';
+
+    var fakeButton = document.createElement('button');
+    fakeButton.className = 'icon icon-dialog';
+    fakeButton.textContent = value;
 
     var select = document.createElement('select');
     select.dataset.perm = perm;
@@ -334,8 +363,10 @@ var ApplicationsList = {
       select.focus();
     };
 
-    content.appendChild(select);
+    fakeSelectHolder.appendChild(fakeButton);
+    fakeSelectHolder.appendChild(select);
     item.appendChild(content);
+    item.appendChild(fakeSelectHolder);
     this.detailPermissionsList.appendChild(item);
   },
 

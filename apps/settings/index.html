@@ -830,7 +830,7 @@
           </label>
         </li>
       </ul>
-      
+
       <script type="application/javascript" defer src="js/carrier.js"></script>
       -->
     </section>
@@ -1635,7 +1635,22 @@
       <header>
         <h2 data-l10n-id="uninstallApp">Uninstall App</h2>
       </header>
-      <button id="uninstall-app" data-l10n-id="uninstallApp" class="danger">Uninstall App</button>
+      <ul>
+        <li>
+          <button id="uninstall-app" data-l10n-id="uninstallApp" class="icon icon-dialog">Uninstall App</button>
+        </li>
+      </ul>
+
+      <form role="dialog" data-type="confirm" hidden class="ua-alert">
+        <section>
+          <p data-l10n-id="uninstallConfirm"></p>
+        </section>
+        <menu>
+          <button class="ua-alert-cancel" data-l10n-id="cancel">Cancel</button>
+          <button class="ua-alert-ok danger" data-l10n-id="ok">Ok</button>
+        </menu>
+      </form>
+
       -->
     </section>
 
