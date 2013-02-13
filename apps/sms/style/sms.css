@@ -109,7 +109,7 @@ form[role="dialog"][data-type="edit"] header menu[type="toolbar"] button {
   opacity: 0;
   display: block;
   overflow: hidden;
-  right: 5rem; 
+  right: 5rem;
 }
 
 [data-type="list"] aside.icon-unread {
@@ -220,7 +220,7 @@ form[role="dialog"][data-type="edit"] header menu[type="toolbar"] button {
   display: none;
 }
 
-/* 
+/*
   Styles for Edit mode in Thread List
 */
 
@@ -327,14 +327,6 @@ section[role="region"].new > header:first-child form {
   height: auto;
 }
 
-#messages-container[data-type="list"] li.hidden {
-  display: none;
-}
-
-#messages-container[data-type="list"] header.hidden {
-  display: none;
-}
-
 #messages-container[data-type="list"] li.bubble:first-child {
   padding: 0 0 0.5rem 0;
 }
@@ -343,7 +335,7 @@ section[role="region"].new > header:first-child form {
   height: 100%;
 }
 
-#messages-container[data-type="list"] li.bubble p {  
+#messages-container[data-type="list"] li.bubble p {
   text-align: right;
   overflow: visible;
   white-space: normal;
@@ -420,7 +412,7 @@ section[role="region"].new > header:first-child form {
   overflow: hidden;
 }
 
-/* 
+/*
   Styles for Edit mode in Messages Container
 */
 
@@ -532,33 +524,35 @@ form.bottom[role="search"].new-sms-form {
 #loading [role="status"] {
   text-align: center;
   height: 4rem;
-} 
+}
 
 /*
   No result container
 */
 
 #no-result-container {
-  background-image: url('images/SMS_200x200_bubble.png');
-  background-repeat:no-repeat;
-  background-attachment:fixed;
-  background-position:center;
+  position: absolute;
   height: 100%;
   width: 100%;
+  background: url('images/SMS_200x200_bubble.png') no-repeat 50% 10rem;
 }
 
 #no-result-message {
-  text-align: left;
-  line-height: 3rem;
-  position: relative;
-  top: 50%;
-  border-top: .1rem solid rgba(96,96,96,.5);
-  padding: 2rem 0.5rem;
-  width: 27rem;
-  margin: -8rem auto;
+  position: absolute;
+  top: 15rem;
+  left: 1.5rem;
+  padding-top: 0.5rem;
+  border-top: 0.1rem solid rgba(96,96,96,.5);
+}
+
+#no-result-message > p {
+  margin: 0;
+  padding: 0 1.5rem;
   color: #606060;
+  line-height: 2.9rem;
   font-weight: 300;
-  font-size: calc(10 * 0.226rem);
+  font-size: 2.3rem;
+  text-align: left;
 }
 
 /*
