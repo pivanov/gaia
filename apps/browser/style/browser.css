@@ -261,18 +261,18 @@ input[type="image"] {
 }
 
 .tabs-screen #toolbar-start {
-  background-image: url('./images/iconaction_back_50x50.png'),
+  background-image: url('./images/iconaction_back.png'),
                     url('./images/tabs-badge-background.png');
   background-repeat: no-repeat, no-repeat;
   background-position: top right, right;
-  background-size: 5rem, auto 5rem;
+  background-size: 4.5rem, auto 5rem;
   padding-right: 6.5rem;
 }
 
 .tabs-screen #toolbar-start:active {
-  background-image: url('./images/iconaction_back_50x50.png'),
+  background-image: url('./images/iconaction_back.png'),
                     url('./images/tab-pressed-bg.png');
-  background-size: 5rem, auto 5rem;
+  background-size: 4.5rem, auto 5rem;
 }
 
 .tabs-screen #frames {
