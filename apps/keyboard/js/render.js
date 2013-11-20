@@ -97,6 +97,17 @@ const IMERender = (function() {
       var kbRow = document.createElement('div');
       var rowLayoutWidth = 0;
       kbRow.classList.add('keyboard-row');
+
+      if (nrow === 0) {
+        kbRow.classList.add('one');
+      } else if (nrow === 1) {
+        kbRow.classList.add('two');
+      } else if (nrow === 2) {
+        kbRow.classList.add('three');
+      } if (nrow === 3) {
+        kbRow.classList.add('four');
+      }
+
       if (nrow === layout.keys.length - 1) {
         kbRow.classList.add('keyboard-last-row');
       }
@@ -810,6 +821,7 @@ const IMERender = (function() {
     // Using innerHTML here because some labels (so far only the &nbsp; in the
     // space key) can be HTML entities.
     labelNode.innerHTML = label;
+    labelNode.dataset.keycode = label;
 
     vWrapperNode.appendChild(labelNode);
     if (altNoteNode) {
