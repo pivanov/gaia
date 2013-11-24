@@ -1,0 +1,20 @@
+{
+  "name": "Chill Radio",
+  "description": "Chill Radio for FirefoxOS Team",
+  "launch_path": "/index.html",
+  "developer": {
+    "name": "The Gaia Team",
+    "url": "https://github.com/mozilla-b2g/gaia"
+  },
+  "locales": {
+    "en-US": {
+      "name": "Chill Radio",
+      "description": "Chill Radio for FirefoxOS Team"
+    }
+  },
+  "default_locale": "en-US",
+  "icons": {
+    "60": "/assets/img/icon_60.png"
+  },
+  "orientation": "default"
+}
