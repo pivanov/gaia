@@ -434,6 +434,27 @@ function processEvents(exitResultFunc) {
   }
 }
 
+function getTempFolder(dirName) {
+  var file = Cc['@mozilla.org/file/directory_service;1']
+               .getService(Ci.nsIProperties).get('TmpD', Ci.nsIFile);
+  file.append(dirName);
+  file.createUnique(Ci.nsIFile.DIRECTORY_TYPE, parseInt('0755', 8));
+  file = file.clone();
+  return file;
+}
+
+function getXML(file) {
+  try {
+    var parser = Cc["@mozilla.org/xmlextras/domparser;1"]
+             .createInstance(Ci.nsIDOMParser);
+    let content = getFileContent(file);
+    return parser.parseFromString(content, 'application/xml');
+  } catch (e) {
+    dump('Invalid XML file : ' + file.path + '\n');
+    throw e;
+  }
+}
+
 /**
  * Simple log with the following format [tag] msg1 msg2. The first argument is
  * used as tag.
@@ -525,6 +546,10 @@ function getApp(parent, appname, gaiadir, distdir) {
   return app;
 }
 
+function normalizeAppId(appname) {
+  return appname.replace(' ', '-').toLowerCase().replace(/\W/g, '');
+}
+
 exports.isSubjectToBranding = isSubjectToBranding;
 exports.ls = ls;
 exports.getFileContent = getFileContent;
@@ -542,6 +567,9 @@ exports.getGaia = getGaia;
 exports.getBuildConfig = getBuildConfig;
 exports.getAppsByList = getAppsByList;
 exports.getApp = getApp;
+exports.getXML = getXML;
+exports.getTempFolder = getTempFolder;
+exports.normalizeAppId = normalizeAppId;
 // ===== the following functions support node.js compitable interface.
 exports.FILE_TYPE_FILE = FILE_TYPE_FILE;
 exports.FILE_TYPE_DIRECTORY = FILE_TYPE_DIRECTORY;

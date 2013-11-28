@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1">
     <meta charset="utf-8">
 
     <!-- Shared code -->
@@ -209,6 +210,9 @@
     <!-- Wifi -->
     <script defer src="js/wifi.js"></script>
 
+    <!-- Nfc -->
+    <script defer src="js/nfc_manager.js"></script>
+
     <!-- Voicemail -->
     <script defer src="js/voicemail.js"></script>
 
@@ -375,6 +379,7 @@
         <!-- Notification -->
         <div id="statusbar-notification" class="sb-start sb-icon sb-icon-notification"
           data-num="" hidden></div>
+        <div id="statusbar-keyboard" class="sb-start sb-icon sb-icon-keyboard" hidden></div>
 
         <!-- Time -->
         <div id="statusbar-time"></div>

@@ -103,7 +103,8 @@ var KeyboardManager = {
       return res;
     }, {});
 
-    SettingsListener.observe('debug.keyboard-oop.enabled', false,
+    // 3rd-party keyboard apps must be run out-of-process.
+    SettingsListener.observe('keyboard.3rd-party-app.enabled', false,
       function(value) {
         this.isOutOfProcessEnabled = value;
       }.bind(this));
@@ -134,6 +135,7 @@ var KeyboardManager = {
     window.addEventListener('activitywillclose', this);
     window.addEventListener('attentionscreenshow', this);
     window.addEventListener('mozbrowsererror', this);
+    window.addEventListener('applicationsetupdialogshow', this);
 
     // To handle keyboard layout switching
     window.addEventListener('mozChromeEvent', function(evt) {
@@ -270,9 +272,6 @@ var KeyboardManager = {
       }
       self.setKeyboardToShow(group);
 
-      // We also want to show the permanent notification
-      // in the UtilityTray.
-      self.showIMESwitcher();
     }
 
     if (type === 'blur') {
@@ -354,9 +353,9 @@ var KeyboardManager = {
     keyboard.setAttribute('mozapp', manifestURL);
 
     if (this.isOutOfProcessEnabled) {
-      console.log('=== Enable keyboard run as OOP ===');
+      console.log('=== Enable keyboard: ' + layout.origin + ' run as OOP ===');
       keyboard.setAttribute('remote', 'true');
-      keyboard.classList.add('ignore-focus');
+      keyboard.setAttribute('ignoreuserfocus', 'true');
     }
 
     this.keyboardFrameContainer.appendChild(keyboard);
@@ -394,6 +393,10 @@ var KeyboardManager = {
     } else {
       updateHeight();
     }
+
+    // Show the permanent notification in the UtilityTray.
+    // For changing keyboard layout without switch key.
+    this.showIMESwitcher();
   },
 
   handleEvent: function km_handleEvent(evt) {
@@ -409,6 +412,7 @@ var KeyboardManager = {
           self.hideKeyboardImmediately();
         }, 0);
         break;
+      case 'applicationsetupdialogshow':
       case 'activitywillclose':
       case 'appwillclose':
         this.hideKeyboardImmediately();
@@ -667,9 +671,6 @@ var KeyboardManager = {
         // user selected a new keyboard.
         window.dispatchEvent(new CustomEvent('keyboardchanged'));
 
-        // Refresh the switcher, or the labled type and layout name
-        // won't change.
-        self.showIMESwitcher();
       }, function() {
         var showed = self.showingLayout;
         if (!self.keyboardLayouts[showed.type])
