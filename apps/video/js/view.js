@@ -82,7 +82,7 @@ navigator.mozSetMessageHandler('activity', function viewVideo(activity) {
     var ids = ['player', 'fullscreen-view', 'videoControls',
                'close', 'play', 'playHead',
                'elapsedTime', 'video-title', 'duration-text', 'elapsed-text',
-               'slider-wrapper', 'spinner-overlay',
+               'spinner-overlay',
                'menu', 'save', 'banner', 'message'];
 
     ids.forEach(function createElementRef(name) {
