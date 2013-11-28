@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="style/VideoPlayer.css" type="text/css" />
     <link rel="stylesheet" href="shared/style/headers.css" type="text/css" />
     <link rel="stylesheet" href="shared/style_unstable/progress_activity.css"/>
+    <link rel="stylesheet" href="shared/style_unstable/tabs.css"/>
     <!-- Reponsive design for large device -->
     <link rel="stylesheet" href="style/gallery_large.css" type="text/css" media="(min-width: 768px)" />
     <!-- this file is loaded lazily but is listed here so it gets packaged
@@ -92,7 +93,7 @@
       </div>
     </section>
 
-    <section role="region" id="edit-view" class="hidden skin-organic">
+    <section role="region" id="edit-view" class="hidden skin-dark">
       <header id="edit-header">
         <button id="edit-cancel-button"><span class="icon icon-close"></span></button>
         <menu type="toolbar">
@@ -169,13 +170,23 @@
       </div>
 
       <!-- buttons for selecting the type of edit to perform -->
-      <footer id="edit-toolbar">
-        <a id="edit-exposure-button" class="selected radio button"></a>
-        <a id="edit-crop-button" class="radio button"></a>
-        <a id="edit-effect-button" class="radio button"></a>
-        <a id="edit-border-button" class="radio button"></a>
-        <a id="edit-enhance-button" class="radio button"></a>
-      </footer>
+      <ul id="edit-toolbar" role="tablist" class="skin-dark">
+        <li role="tab">
+          <a id="edit-exposure-button" class="icon selected"></a>
+        </li>
+        <li role="tab">
+          <a id="edit-crop-button" class="icon"></a>
+        </li>
+        <li role="tab">
+          <a id="edit-effect-button" class="icon"></a>
+        </li>
+        <li role="tab">
+          <a id="edit-border-button" class="icon"></a>
+        </li>
+        <li role="tab">
+          <a id="edit-enhance-button" class="icon"></a>
+        </li>
+      </ul>
     </section>
 
     <!-- This element gets positioned over different view elements -->
