@@ -484,6 +484,23 @@ Cards = {
       args.onPushed(cardImpl);
   },
 
+  /**
+   * Pushes a new card if none exists, otherwise, uses existing
+   * card and passes args to that card via tellCard. Arguments
+   * are the same as pushCard.
+   * @return {Boolean} true if card was pushed.
+   */
+  pushOrTellCard: function(type, mode, showMethod, args, placement) {
+    var query = [type, mode];
+    if (this.hasCard(query)) {
+      this.tellCard(query, args);
+      return false;
+    } else {
+      this.pushCard.apply(this, Array.slice(arguments));
+      return true;
+    }
+  },
+
   _findCardUsingTypeAndMode: function(type, mode) {
     for (var i = 0; i < this._cardStack.length; i++) {
       var cardInst = this._cardStack[i];
@@ -539,6 +556,21 @@ Cards = {
     return this._cardStack[this._findCard(query)];
   },
 
+  getCurrentCardType: function() {
+    var result = null,
+        card = this._cardStack[this.activeCardIndex];
+
+    // Favor any _pendingPush value as it is about to
+    // become current, just waiting on an async cycle
+    // to finish. Otherwise use current card value.
+    if (this._pendingPush) {
+      result = this._pendingPush;
+    } else if (card) {
+      result = [card.cardDef.name, card.cardImpl.mode];
+    }
+    return result;
+  },
+
   folderSelector: function(callback) {
     var self = this;
 
@@ -555,6 +587,7 @@ Cards = {
         for (var i = 0; i < folders.length; i++) {
           var folder = folders[i];
           self.folderPrompt.addToList(folder.name, folder.depth,
+            folder.selectable,
             function(folder) {
               return function() {
                 self.folderPrompt.hide();

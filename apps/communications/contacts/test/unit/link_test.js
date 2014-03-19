@@ -1,3 +1,5 @@
+'use strict';
+
 require('/shared/js/text_normalizer.js');
 requireApp('communications/contacts/test/unit/mock_link.html.js');
 requireApp('communications/contacts/test/unit/mock_l10n.js');
@@ -6,7 +8,7 @@ requireApp('communications/contacts/test/unit/mock_utils.js');
 requireApp('communications/contacts/test/unit/mock_asyncstorage.js');
 requireApp('communications/contacts/js/import_utils.js');
 requireApp('communications/contacts/js/utilities/dom.js');
-requireApp('communications/contacts/js/utilities/binary_search.js');
+require('/shared/js/binary_search.js');
 requireApp('communications/contacts/js/utilities/templates.js');
 requireApp('communications/contacts/test/unit/mock_linked_contacts.js');
 requireApp('communications/contacts/test/unit/mock_fb.js');
@@ -39,6 +41,8 @@ if (!this.oauthflow) {
 
 suite('Link Friends Test Suite', function() {
 
+  var spy;
+
   suiteSetup(function() {
     realImageLoader = window.ImageLoader;
     window.ImageLoader = MockImageLoader;
@@ -53,6 +57,9 @@ suite('Link Friends Test Suite', function() {
     realOauthflow = window.oauthflow;
     window.oauthflow = MockOauthflow;
 
+    spy = sinon.spy(fb.utils, 'setCachedNumFriends').withArgs(
+                                      MockAllFacebookContacts.data.length);
+
     document.body.innerHTML = MockLinkHtml;
 
     linkProposal = document.body.querySelector('#friends-list');
@@ -62,6 +69,9 @@ suite('Link Friends Test Suite', function() {
     fb.link.init();
   });
 
+  teardown(function() {
+    spy.reset();
+  });
 
   test('Link UI. Proposal Calculated', function(done) {
     linkProposal.innerHTML = '';
@@ -85,6 +95,9 @@ suite('Link Friends Test Suite', function() {
                        querySelector('li[data-uuid="1xz"]'));
       assert.isNotNull(document.
                        querySelector('li[data-uuid="2abc"]'));
+
+      // Check that the total number of friends is properly cached (bug 838605)
+      assert.isTrue(spy.calledOnce);
 
       done();
     });
@@ -117,6 +130,9 @@ suite('Link Friends Test Suite', function() {
                        querySelector('li[data-uuid="aa45bb"]'));
 
       MockLinkedContacts = oldMockLinkedContacts;
+
+      // Check that the total number of friends is properly cached (bug 838605)
+      assert.isTrue(spy.calledOnce);
 
       done();
     });

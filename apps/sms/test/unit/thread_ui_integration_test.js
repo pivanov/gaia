@@ -6,13 +6,14 @@
 if (typeof GestureDetector === 'undefined') {
   require('/shared/js/gesture_detector.js');
 }
-requireApp('system/test/unit/mock_gesture_detector.js');
+require('/shared/test/unit/mocks/mock_gesture_detector.js');
 
 requireApp('sms/test/unit/mock_contact.js');
 requireApp('sms/test/unit/mock_l10n.js');
 requireApp('sms/test/unit/mock_navigatormoz_sms.js');
 requireApp('sms/test/unit/mock_message_manager.js');
 requireApp('sms/test/unit/mock_moz_activity.js');
+requireApp('sms/test/unit/mock_information.js');
 requireApp('sms/js/utils.js');
 requireApp('sms/js/settings.js');
 requireApp('sms/js/attachment_menu.js');
@@ -24,12 +25,12 @@ requireApp('sms/js/message_manager.js');
 requireApp('sms/js/thread_list_ui.js');
 requireApp('sms/js/thread_ui.js');
 requireApp('sms/js/attachment.js');
-requireApp('sms/js/fixed_header.js');
 requireApp('sms/js/contact_renderer.js');
 
 var mHelperIntegration = new MocksHelper([
   'MessageManager',
-  'MozActivity'
+  'MozActivity',
+  'Information'
 ]).init();
 
 suite('ThreadUI Integration', function() {
@@ -376,6 +377,8 @@ suite('ThreadUI Integration', function() {
     });
 
     test('Assimilate stranded recipients (sendButton)', function() {
+      this.sinon.spy(MessageManager, 'sendSMS');
+
       // To ensure the onSendClick handler will succeed:
 
       // 1. Add some content to the message
@@ -406,17 +409,14 @@ suite('ThreadUI Integration', function() {
 
       // Simulate sendButton click
       ThreadUI.onSendClick();
-
-      // This is asserted differently, since cleanFields has
-      // disposed of the recipients, input and attachments.
-
-      assert.ok(MessageManager.sendSMS.called);
+      ThreadUI.simSelectedCallback(undefined, 0);
 
       // Ensure that the "unaccepted" recipient was assimilated
       // and included in the recipients list when message was sent
-      var calledWith = MessageManager.sendSMS.args[0];
-      assert.deepEqual(calledWith[0], ['999', '000']);
-      assert.deepEqual(calledWith[1], 'foo');
+      sinon.assert.calledWithMatch(MessageManager.sendSMS, {
+        recipients: ['999', '000'],
+        content: 'foo'
+      });
     });
 
     /* Bug:909641 test fails on ci

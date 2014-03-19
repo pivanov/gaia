@@ -1,15 +1,20 @@
+/* globals MockNavigatorMozIccManager, MockNavigatorMozMobileConnections,
+           MockNavigatorSettings, MockNavigatorMozIccManager,
+           OperatorVariantHandler */
+
 'use strict';
 
-requireApp('system/shared/test/unit/mocks/mock_icc_helper.js');
 requireApp('system/shared/test/unit/mocks/mock_navigator_moz_settings.js');
+requireApp('system/shared/test/unit/mocks/mock_navigator_moz_icc_manager.js');
+require('/shared/test/unit/mocks/mock_navigator_moz_mobile_connections.js');
 
-requireApp('system/shared/js/operator_variant_helper.js');
-
-var mocksForOperatorVariant = new MocksHelper([
-  'IccHelper'
-]).init();
+require('/shared/js/operator_variant_helper.js');
+require('/shared/js/apn_helper.js');
+requireApp('system/js/operator_variant/operator_variant.js');
 
 suite('Operator variant', function() {
+  const FAKE_ICC_ID = '8934071100276980483';
+  const FAKE_ICC_CARD_INDEX = '0';
   const TEST_NETWORK_MCC = '001';
 
   const EXPECTED_MNC = '01';
@@ -49,44 +54,82 @@ suite('Operator variant', function() {
     { key: 'ril.supl.httpProxyHost', value: '127.0.0.1' },
     { key: 'ril.supl.httpProxyPort', value: '8080' },
     { key: 'ril.supl.authtype', value: 'none' },
+    { key: 'ril.dun.carrier', value: 'Test Network' },
+    { key: 'ril.dun.apn', value: 'internet' },
+    { key: 'ril.dun.user', value: 'user' },
+    { key: 'ril.dun.passwd', value: 'password' },
+    { key: 'ril.dun.httpProxyHost', value: '127.0.0.1' },
+    { key: 'ril.dun.httpProxyPort', value: '8080' },
+    { key: 'ril.dun.authtype', value: 'none' },
+    { key: 'ril.ims.carrier', value: 'Test Network' },
+    { key: 'ril.ims.apn', value: 'internet' },
+    { key: 'ril.ims.user', value: 'user' },
+    { key: 'ril.ims.passwd', value: 'password' },
+    { key: 'ril.ims.httpProxyHost', value: '127.0.0.1' },
+    { key: 'ril.ims.httpProxyPort', value: '8080' },
+    { key: 'ril.ims.authtype', value: 'none' },
     { key: 'ril.mms.carrier', value: 'Test Network' },
     { key: 'ril.mms.apn', value: 'internet' },
     { key: 'ril.mms.mmsc', value: 'http://127.0.0.1' },
     { key: 'ril.mms.mmsproxy', value: '127.0.0.1' },
     { key: 'ril.mms.mmsport', value: '8080' },
     { key: 'ril.data.carrier', value: 'Test Network' },
-    { key: 'ril.iccInfo.mbdn', value: '999999' },
+    { key: 'ril.iccInfo.mbdn', value: ['999999'] },
     { key: 'ril.cellbroadcast.searchlist', value: '0,1,2,3' }
   ];
 
-  var realMozMobileConnection;
-  var realMozSettings;
+  var realMozSettings, realMozIccManager, realMozMobileConnections;
 
-  mocksForOperatorVariant.attachTestHelpers();
+  var mozIcc;
+
   suiteSetup(function() {
-    MockIccHelper.mProps.cardState = 'ready';
-
     realMozSettings = navigator.mozSettings;
     navigator.mozSettings = MockNavigatorSettings;
 
-    // The code being run in the anonymous function in this js file is dependent
-    // on the mocks being setup properly. If we load it with the rest of the js
-    // files it will always fail to run.
-    requireApp('system/js/operator_variant/operator_variant.js');
+    realMozIccManager = navigator.mozIccManager;
+    navigator.mozIccManager = MockNavigatorMozIccManager;
+
+    realMozMobileConnections = navigator.mozMobileConnections;
+    navigator.mozMobileConnections = MockNavigatorMozMobileConnections;
   });
 
   suiteTeardown(function() {
-    navigator.mozMobileConnection = realMozMobileConnection;
     navigator.mozSettings = realMozSettings;
+    navigator.mozIccManager = realMozIccManager;
+    navigator.mozMobileConnections = realMozMobileConnections;
   });
 
   setup(function() {
-    MockIccHelper.mProps.iccInfo = NULL_ICC_INFO;
-    MockIccHelper.mTriggerEventListeners('iccinfochange', {});
+    mozIcc = {
+      'cardState': 'ready',
+      matchMvno: function mi_matchMvno(mvnoType, matchData) {
+        var req = {
+          onsuccess: null,
+          onerror: null,
+          result: false
+        };
+
+        setTimeout(function() {
+          if (req.onsuccess) {
+            req.onsuccess();
+          }
+        });
+
+        return req;
+      }
+    };
+    MockNavigatorMozIccManager.addIcc(FAKE_ICC_ID, mozIcc);
+    MockNavigatorMozIccManager.getIccById(FAKE_ICC_ID).iccInfo =
+      NULL_ICC_INFO;
+
+    MockNavigatorMozMobileConnections[0].data = {
+      type: 'gsm'
+    };
   });
 
   teardown(function() {
-    MockIccHelper.mProps.iccInfo = NULL_ICC_INFO;
+    MockNavigatorMozIccManager.mTeardown();
+    MockNavigatorMozMobileConnections.mTeardown();
   });
 
   function setObservers(keyValues, observer, remove) {
@@ -134,8 +177,9 @@ suite('Operator variant', function() {
 
     setObservers(KEYS_VALUES, observer);
 
-    MockIccHelper.mProps.iccInfo = EXPECTED_ICC_INFO;
-    MockIccHelper.mTriggerEventListeners('iccinfochange', {});
+    MockNavigatorMozIccManager.getIccById(FAKE_ICC_ID).iccInfo =
+      EXPECTED_ICC_INFO;
+    OperatorVariantHandler.handleICCCard(FAKE_ICC_ID, FAKE_ICC_CARD_INDEX);
   });
 
   test('operator variant apply once per boot', function() {
@@ -164,10 +208,52 @@ suite('Operator variant', function() {
     MockNavigatorSettings.addObserver('ril.data.carrier', observer.bound);
 
     // Testing apply once per boot requires *real* mcc/mnc information.
-    MockIccHelper.mProps.iccInfo = T_MOBILE_160_US_ICC_INFO;
-    MockIccHelper.mTriggerEventListeners('iccinfochange', {});
+    MockNavigatorMozIccManager.getIccById(FAKE_ICC_ID).iccInfo =
+      T_MOBILE_160_US_ICC_INFO;
+    OperatorVariantHandler.handleICCCard(FAKE_ICC_ID, FAKE_ICC_CARD_INDEX);
+    MockNavigatorMozIccManager.getIccById(FAKE_ICC_ID).triggerEventListeners(
+      'iccinfochange', {}
+    );
 
-    MockIccHelper.mProps.iccInfo = T_MOBILE_200_US_ICC_INFO;
-    MockIccHelper.mTriggerEventListeners('iccinfochange', {});
+    MockNavigatorMozIccManager.getIccById(FAKE_ICC_ID).iccInfo =
+      T_MOBILE_200_US_ICC_INFO;
+    MockNavigatorMozIccManager.getIccById(FAKE_ICC_ID).triggerEventListeners(
+      'iccinfochange', {}
+    );
+  });
+
+  test('APN filtering', function(done) {
+    var ovh = new OperatorVariantHandler(FAKE_ICC_ID, FAKE_ICC_CARD_INDEX);
+
+    /* Inject some dummy MCC & MNC values corresponding to the test APNs, look
+     * into shared/resources/apn.json for the corresponding values */
+    ovh._iccSettings = { mcc: '001', mnc: '02' };
+
+    MockNavigatorMozMobileConnections[0].data.type = 'gsm';
+    ovh.retrieveOperatorVariantSettings(function(list) {
+      assert.equal(list.length, 2);
+      assert.isTrue(list.some(function(element) {
+        return (element.carrier === 'NoBearer');
+      }));
+      assert.isTrue(list.some(function(element) {
+        return (element.carrier === 'ZeroBearer');
+      }));
+
+      MockNavigatorMozMobileConnections[0].data.type = 'evdo0';
+        ovh.retrieveOperatorVariantSettings(function(list) {
+        assert.equal(list.length, 3);
+        assert.isTrue(list.some(function(element) {
+          return (element.carrier === 'NoBearer');
+        }));
+        assert.isTrue(list.some(function(element) {
+          return (element.carrier === 'ZeroBearer');
+        }));
+        assert.isTrue(list.some(function(element) {
+          return (element.carrier === 'Evdo0Bearer');
+        }));
+
+        done();
+      });
+    });
   });
 });

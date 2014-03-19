@@ -14,17 +14,15 @@ var GridManager = (function() {
   var BASE_HEIGHT = 460; // 480 - 20 (status bar height)
   var DEVICE_HEIGHT = window.innerHeight;
 
-  var HIDDEN_ROLES = ['system', 'input', 'homescreen'];
+  var HIDDEN_ROLES = ['system', 'input', 'homescreen', 'search'];
+
+  // Store the pending apps to be installed until SingleVariant conf is loaded
+  var pendingInstallRequests = [];
 
   function isHiddenApp(role) {
     if (!role) {
-      console.warn(
-        'Unexpected role when checking hidden app: ' + JSON.stringify(role)
-      );
-
       return false;
     }
-
     return (HIDDEN_ROLES.indexOf(role) !== -1);
   }
 
@@ -38,6 +36,12 @@ var GridManager = (function() {
   var container;
 
   var windowWidth = window.innerWidth;
+
+  // This value is used in order to keep the layers onscreen when they are
+  // moved on a panel changes. This prevent the layers to be destroyed and
+  // recreated on the next move.
+  var windowWidthMinusOne = windowWidth - 0.001;
+
   var swipeThreshold, swipeFriction, tapThreshold;
 
   var dragging = false;
@@ -264,7 +268,7 @@ var GridManager = (function() {
           refresh = function(e) {
             if (deltaX <= 0) {
               next.MozTransform =
-                'translateX(' + (windowWidth + deltaX) + 'px)';
+                'translateX(' + (windowWidthMinusOne + deltaX) + 'px)';
               current.MozTransform = 'translateX(' + deltaX + 'px)';
             } else {
               startX = currentX;
@@ -275,7 +279,7 @@ var GridManager = (function() {
           refresh = function(e) {
             if (deltaX >= 0) {
               previous.MozTransform =
-                'translateX(' + (-windowWidth + deltaX) + 'px)';
+                'translateX(' + (-windowWidthMinusOne + deltaX) + 'px)';
               current.MozTransform = 'translateX(' + deltaX + 'px)';
             } else {
               startX = currentX;
@@ -287,23 +291,24 @@ var GridManager = (function() {
           refresh = function(e) {
             if (deltaX >= 0) {
               previous.MozTransform =
-                'translateX(' + (-windowWidth + deltaX) + 'px)';
+                'translateX(' + (-windowWidthMinusOne + deltaX) + 'px)';
 
               // If we change direction make sure there isn't any part
               // of the page on the other side that stays visible.
               if (forward) {
                 forward = false;
-                next.MozTransform = 'translateX(' + windowWidth + 'px)';
+                next.MozTransform = 'translateX(' + windowWidthMinusOne + 'px)';
               }
             } else {
               next.MozTransform =
-                'translateX(' + (windowWidth + deltaX) + 'px)';
+                'translateX(' + (windowWidthMinusOne + deltaX) + 'px)';
 
               // If we change direction make sure there isn't any part
               // of the page on the other side that stays visible.
               if (!forward) {
                 forward = true;
-                previous.MozTransform = 'translateX(-' + windowWidth + 'px)';
+                previous.MozTransform =
+                  'translateX(-' + windowWidthMinusOne + 'px)';
               }
             }
 
@@ -324,14 +329,13 @@ var GridManager = (function() {
           window.mozRequestAnimationFrame(refresh);
         };
 
-        var container = pages[currentPage].container;
-        container.addEventListener(touchmove, pan, true);
+        window.addEventListener(touchmove, pan, true);
 
         removePanHandler = function removePanHandler(e) {
-          touchEndTimestamp = e ? e.timeStamp : Number.MAX_VALUE;
+          touchEndTimestamp = e ? e.timeStamp : 0;
           window.removeEventListener(touchend, removePanHandler, true);
 
-          container.removeEventListener(touchmove, pan, true);
+          window.removeEventListener(touchmove, pan, true);
 
           window.mozRequestAnimationFrame(function panTouchEnd() {
             onTouchEnd(deltaX, e);
@@ -383,14 +387,20 @@ var GridManager = (function() {
     });
   }
 
+  function cancelPanning() {
+    removePanHandler();
+  }
+
   function onTouchEnd(deltaX, evt) {
     var page = currentPage;
 
     var velocity = panningResolver.getVelocity();
     var distanceToTravel = 0.5 * Math.abs(velocity) * velocity / swipeFriction;
-    // If the actual distance plus the coast distance is more than 40% the
+    // If the actual distance plus the coast distance is more than 25% the
     // screen, transition to the next page
-    if (Math.abs(deltaX + distanceToTravel) > swipeThreshold) {
+    if (Math.abs(deltaX + distanceToTravel) > swipeThreshold ||
+       (Math.abs(deltaX) > tapThreshold &&
+           touchEndTimestamp - touchStartTimestamp < kPageTransitionDuration)) {
       var forward = dirCtrl.goesForward(deltaX);
       if (forward && currentPage < pages.length - 1) {
         page = page + 1;
@@ -434,17 +444,6 @@ var GridManager = (function() {
     }, SAVE_STATE_TIMEOUT);
   }
 
-  function togglePagesVisibility(start, end) {
-    for (var i = 0; i < pages.length; i++) {
-      var pagediv = pages[i].container;
-      if (i < start || i > end) {
-        pagediv.style.display = 'none';
-      } else {
-        pagediv.style.display = 'block';
-      }
-    }
-  }
-
   function goToPageCallback(index, fromPage, toPage, dispatchEvents, callback) {
     delete document.body.dataset.transitioning;
 
@@ -459,13 +458,13 @@ var GridManager = (function() {
     if (index) {
       var previous = pages[index - 1].container.style;
       previous.MozTransition = '';
-      previous.MozTransform = 'translateX(-' + windowWidth + 'px)';
+      previous.MozTransform = 'translateX(-' + windowWidthMinusOne + 'px)';
     }
 
     if (index < pages.length - 1) {
       var next = pages[index + 1].container.style;
       next.MozTransition = '';
-      next.MozTransform = 'translateX(' + windowWidth + 'px)';
+      next.MozTransform = 'translateX(' + windowWidthMinusOne + 'px)';
     }
 
     var current = toPage.container.style;
@@ -474,8 +473,6 @@ var GridManager = (function() {
 
     fromPage.container.setAttribute('aria-hidden', true);
     toPage.container.removeAttribute('aria-hidden');
-
-    togglePagesVisibility(index - 1, index + 1);
 
     if (callback) {
       setTimeout(callback, 0);
@@ -490,6 +487,7 @@ var GridManager = (function() {
     if (index < 0 || index >= pages.length)
       return;
 
+    touchEndTimestamp = touchEndTimestamp || lastGoingPageTimestamp;
     var delay = touchEndTimestamp - lastGoingPageTimestamp ||
                 kPageTransitionDuration;
     lastGoingPageTimestamp += delay;
@@ -513,16 +511,18 @@ var GridManager = (function() {
     updatePaginationBar();
 
     if (previousPage === newPage) {
-      if (newPage.container.getBoundingClientRect().left !== 0) {
+      // Has the page been translated?
+      if (currentX - startX) {
+        currentX = startX = 0;
         // Pages are translated in X
         if (index > 0) {
-          pages[index - 1].moveByWithEffect(-windowWidth, duration);
+          pages[index - 1].moveByWithEffect(-windowWidthMinusOne, duration);
         }
 
         newPage.moveByWithEffect(0, duration);
 
         if (index < pages.length - 1) {
-          pages[index + 1].moveByWithEffect(windowWidth, duration);
+          pages[index + 1].moveByWithEffect(windowWidthMinusOne, duration);
         }
 
         container.addEventListener('transitionend', function transitionEnd(e) {
@@ -537,11 +537,9 @@ var GridManager = (function() {
       return;
     }
 
-    togglePagesVisibility(start, end);
-
     previousPage.container.dispatchEvent(new CustomEvent('gridpagehidestart'));
     newPage.container.dispatchEvent(new CustomEvent('gridpageshowstart'));
-    previousPage.moveByWithEffect(-forward * windowWidth, duration);
+    previousPage.moveByWithEffect(-forward * windowWidthMinusOne, duration);
     newPage.moveByWithEffect(0, duration);
 
     container.addEventListener('transitionend', function transitionEnd(e) {
@@ -567,6 +565,14 @@ var GridManager = (function() {
 
   function updatePaginationBar() {
     PaginationBar.update(currentPage, pages.length);
+  }
+
+  function updatePageSetSize() {
+    for (var i in pages) {
+      var container = pages[i].container;
+      container.setAttribute('aria-setsize', pages.length);
+      container.setAttribute('aria-posinset', Number(i) + 1);
+    }
   }
 
   /*
@@ -700,6 +706,7 @@ var GridManager = (function() {
       pages.push(page);
 
       pageElement.className = 'page';
+      pageElement.setAttribute('role', 'region');
       container.appendChild(pageElement);
 
       // If the new page is situated right after the current displayed page,
@@ -709,6 +716,7 @@ var GridManager = (function() {
       }
 
       updatePaginationBar();
+      updatePageSetSize();
     },
 
     /*
@@ -720,6 +728,7 @@ var GridManager = (function() {
       pages[index].destroy(); // Destroy page
       pages.splice(index, 1); // Removes page from the list
       updatePaginationBar();
+      updatePageSetSize();
     },
 
     /*
@@ -870,7 +879,7 @@ var GridManager = (function() {
   }
 
   function getApp(origin) {
-    var app = appsByOrigin[origin];
+    var app = appsByOrigin[origin] || bookmarkIcons[origin].app;
     if (app) {
       return new Icon(buildDescriptor(app), app);
     }
@@ -915,6 +924,13 @@ var GridManager = (function() {
     panningResolver = createPanningResolver();
   }
 
+  function addSVEventListener() {
+    window.addEventListener('singlevariant-ready', function svFileReady(ev) {
+      window.removeEventListener('singlevariant-ready', svFileReady);
+      pendingInstallRequests.forEach(GridManager.install);
+    });
+  }
+
   /*
    * Initialize the mozApps event handlers and synchronize our grid
    * state with the applications known to the system.
@@ -928,7 +944,11 @@ var GridManager = (function() {
     }
 
     appMgr.oninstall = function oninstall(event) {
-      GridManager.install(event.application);
+      if (Configurator.isSingleVariantReady) {
+        GridManager.install(event.application);
+      } else {
+        pendingInstallRequests.push(event.application);
+      }
     };
 
     appMgr.onuninstall = function onuninstall(event) {
@@ -961,8 +981,8 @@ var GridManager = (function() {
       for (var manifestURL in iconsByManifestURL) {
         var iconsForApp = iconsByManifestURL[manifestURL];
         for (var entryPoint in iconsForApp) {
-          if (entryPoint) {
-            var icon = iconsForApp[entryPoint];
+          var icon = iconsForApp[entryPoint];
+          if (icon) {
             icon.remove();
             markDirtyState();
           }
@@ -1410,6 +1430,10 @@ var GridManager = (function() {
      *
      */
     init: function gm_init(options, callback) {
+      // Add listener which will alert us when the SingleVariant configuration
+      // file has been read
+      addSVEventListener();
+
       // Populate defaults
       for (var key in defaults) {
         if (typeof options[key] === 'undefined') {
@@ -1492,6 +1516,7 @@ var GridManager = (function() {
         for (var entryPoint in iconsForApp) {
           var icon = iconsForApp[entryPoint];
           updateDock = updateDock || dock.containsIcon(icon);
+          icon.app.ondownloadapplied = icon.app.ondownloaderror = null;
           icon.remove();
         }
         delete appIcons[app.manifestURL];
@@ -1566,8 +1591,14 @@ var GridManager = (function() {
 
     contextmenu: contextmenu,
 
+    cancelPanning: cancelPanning,
+
     get container() {
       return container;
-    }
+    },
+
+    forgetIcon: forgetIcon,
+
+    rememberIcon: rememberIcon
   };
 })();

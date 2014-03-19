@@ -8,6 +8,8 @@ requireApp('communications/dialer/test/unit/mock_keypad.js');
 requireApp('communications/dialer/test/unit/mock_utils.js');
 requireApp('communications/dialer/test/unit/mock_l10n.js');
 requireApp('communications/dialer/test/unit/mock_call.js');
+require('/shared/test/unit/mocks/mock_contact_photo_helper.js');
+require('/shared/test/unit/mocks/mock_navigator_moz_icc_manager.js');
 
 requireApp('communications/dialer/js/handled_call.js');
 requireApp('communications/dialer/js/voicemail.js');
@@ -19,11 +21,13 @@ var mocksHelperForHandledCall = new MocksHelper([
   'CallsHandler',
   'KeypadManager',
   'Utils',
-  'LazyL10n'
+  'LazyL10n',
+  'ContactPhotoHelper'
 ]).init();
 
 suite('dialer/handled_call', function() {
   var realNavigatorSettings;
+  var realMozIccManager;
 
   const VOICEMAIL_NUMBER = '123';
   var subject;
@@ -32,12 +36,17 @@ suite('dialer/handled_call', function() {
   var templates;
 
   var phoneNumber;
+  var photoFullResolution;
+  var photoThumbnail;
 
   mocksHelperForHandledCall.attachTestHelpers();
 
   suiteSetup(function() {
     realNavigatorSettings = navigator.mozSettings;
     navigator.mozSettings = MockNavigatorSettings;
+
+    realMozIccManager = navigator.mozIccManager;
+    navigator.mozIccManager = MockNavigatorMozIccManager;
 
     phoneNumber = Math.floor(Math.random() * 10000);
 
@@ -62,8 +71,10 @@ suite('dialer/handled_call', function() {
                               '<div class="direction">' +
                                 '<div></div>' +
                               '</div>' +
-                            '<button class="merge-button"></button>' +
                             '</div>' +
+                            '<div class="sim">' +
+                            '</div>' +
+                            '<button class="merge-button"></button>' +
                           '</section>';
     document.body.appendChild(templates);
   });
@@ -72,9 +83,18 @@ suite('dialer/handled_call', function() {
     templates.parentNode.removeChild(templates);
     Voicemail.check.restore();
     navigator.mozSettings = realNavigatorSettings;
+    navigator.mozIccManager = realMozIccManager;
   });
 
   setup(function() {
+    photoFullResolution = new Blob();
+    photoThumbnail = new Blob();
+    this.sinon.stub(MockContactPhotoHelper,
+                    'getFullResolution').returns(photoFullResolution);
+    this.sinon.stub(MockContactPhotoHelper,
+                    'getThumbnail').returns(photoThumbnail);
+    this.sinon.useFakeTimers(Date.now());
+
     mockCall = new MockCall(String(phoneNumber), 'dialing');
     subject = new HandledCall(mockCall);
 
@@ -82,6 +102,7 @@ suite('dialer/handled_call', function() {
   });
 
   teardown(function() {
+    MockNavigatorMozIccManager.mTeardown();
     var node = subject.node;
     if (node && node.parentNode) {
       node.parentNode.removeChild(node);
@@ -89,8 +110,12 @@ suite('dialer/handled_call', function() {
   });
 
   suite('initialization', function() {
-    test('photo', function() {
-      assert.equal(subject.photo, MockContacts.mPhoto);
+    test('full resolution photo', function() {
+      assert.equal(subject.photo, photoFullResolution);
+    });
+
+    test('should set caller image by contact photo', function() {
+      assert.equal(MockCallScreen.mSetCallerContactImageArg, subject.photo);
     });
 
     test('call', function() {
@@ -98,7 +123,7 @@ suite('dialer/handled_call', function() {
     });
 
     test('call event listener', function() {
-      assert.isTrue(mockCall._listenerAdded);
+      assert.isTrue(mockCall._eventListeners.statechange.length > 0);
     });
 
     suite('node', function() {
@@ -286,15 +311,30 @@ suite('dialer/handled_call', function() {
     });
 
     suite('with a contact with no picture', function() {
+      var setContactStub;
+
       setup(function() {
         subject.photo = null;
-        MockCallScreen.mSetCallerContactImageCalled = false;
+        setContactStub = this.sinon.stub(MockCallScreen,
+                                         'setCallerContactImage');
         mockCall._connect();
       });
 
       test('wallpaper displaying', function() {
+        assert.isTrue(setContactStub.calledWith(null));
+      });
+    });
+
+    suite('in a group', function() {
+      setup(function() {
+        MockCallScreen.mSetCallerContactImageCalled = false;
+        mockCall.group = {};
+
+        mockCall._connect();
+      });
+
+      test('don\'t display any photos', function() {
         assert.isFalse(MockCallScreen.mSetCallerContactImageCalled);
-        assert.isTrue(MockCallScreen.mSetDefaultContactImageCalled);
       });
     });
 
@@ -323,12 +363,12 @@ suite('dialer/handled_call', function() {
 
       mockCall._connect();
       MockCallScreen.mute();
-      MockCallScreen.turnSpeakerOn();
+      MockCallScreen.switchToSpeaker();
     });
 
     suite('from a regular call', function() {
       setup(function() {
-        this.sinon.useFakeTimers();
+        this.sinon.spy(mockCall, 'removeEventListener');
         mockCall._disconnect();
       });
       test('should save the recents entry', function() {
@@ -341,7 +381,8 @@ suite('dialer/handled_call', function() {
       });
 
       test('should remove listener on the call', function() {
-        assert.isTrue(mockCall._listenerRemoved);
+        sinon.assert.calledWith(mockCall.removeEventListener,
+                                'statechange', subject);
       });
 
       test('should keep the call', function() {
@@ -402,12 +443,13 @@ suite('dialer/handled_call', function() {
   });
 
   suite('resuming', function() {
+    var setContactStub;
+
     setup(function() {
       mockCall._hold();
       MockCallScreen.mSyncSpeakerCalled = false;
       MockCallScreen.mEnableKeypadCalled = false;
-      MockCallScreen.mSetCallerContactImageCalled = false;
-      MockCallScreen.mSetDefaultContactImageCalled = false;
+      setContactStub = this.sinon.stub(MockCallScreen, 'setCallerContactImage');
       subject.photo = 'dummy_photo_1';
       mockCall._resume();
     });
@@ -425,27 +467,26 @@ suite('dialer/handled_call', function() {
     });
 
     test('changed the user photo', function() {
+      assert.isTrue(setContactStub.calledWith(subject.photo));
       assert.isTrue(MockCallScreen.mSetCallerContactImageCalled);
-    });
-
-    test('change image to default if there are no user images', function() {
-      assert.isFalse(MockCallScreen.mSetDefaultContactImageCalled);
-      subject.photo = null;
-      mockCall._hold();
-      mockCall._resume();
-      assert.isTrue(MockCallScreen.mSetDefaultContactImageCalled);
     });
   });
 
   suite('call direction', function() {
-    test('before connexion', function() {
-      assert.isTrue(subject.node.classList.contains('outgoing'));
-    });
 
-    test('after connexion', function() {
-      mockCall._connect();
-      assert.isTrue(subject.node.classList.contains('ongoing'));
-      assert.isTrue(subject.node.classList.contains('outgoing'));
+    suite('outgoing call', function() {
+      setup(function() {
+        mockCall = new MockCall('888', 'outgoing');
+        subject = new HandledCall(mockCall);
+      });
+
+      test('before and after connexion', function() {
+        assert.isTrue(subject.node.classList.contains('outgoing'));
+        assert.isFalse(subject.node.classList.contains('ongoing'));
+        mockCall._connect();
+        assert.isTrue(subject.node.classList.contains('ongoing'));
+        assert.isTrue(subject.node.classList.contains('outgoing'));
+      });
     });
 
     suite('incoming call', function() {
@@ -454,11 +495,9 @@ suite('dialer/handled_call', function() {
         subject = new HandledCall(mockCall);
       });
 
-      test('before connexion', function() {
+      test('before and after connexion', function() {
         assert.isTrue(subject.node.classList.contains('incoming'));
-      });
-
-      test('after connexion', function() {
+        assert.isFalse(subject.node.classList.contains('ongoing'));
         mockCall._connect();
         assert.isTrue(subject.node.classList.contains('ongoing'));
         assert.isTrue(subject.node.classList.contains('incoming'));
@@ -473,6 +512,10 @@ suite('dialer/handled_call', function() {
 
     test('number', function() {
       assert.equal(subject.recentsEntry.number, mockCall.number);
+    });
+
+    test('serviceId', function() {
+      assert.equal(subject.recentsEntry.serviceId, mockCall.serviceId);
     });
 
     suite('type incoming', function() {
@@ -587,7 +630,7 @@ suite('dialer/handled_call', function() {
         assert.ok(contactInfo.contact);
         var contact = contactInfo.contact;
         assert.equal(contact.name, MockContacts.mName);
-        assert.equal(contact.photo, MockContacts.mPhoto);
+        assert.deepEqual(contact.photo, [photoThumbnail]);
         assert.equal(contact.tel.length, 1);
         assert.equal(contact.tel[0].value, MockContacts.mCalledWith);
         assert.equal(contact.tel[0].carrier, MockContacts.mCarrier);
@@ -629,7 +672,7 @@ suite('dialer/handled_call', function() {
         assert.ok(contactInfo.contact);
         var contact = contactInfo.contact;
         assert.equal(contact.name, MockContacts.mName);
-        assert.equal(contact.photo, MockContacts.mPhoto);
+        assert.deepEqual(contact.photo, [photoThumbnail]);
         assert.equal(contact.tel.length, 1);
         assert.equal(contact.tel[0].value, MockContacts.mCalledWith);
         assert.equal(contact.tel[0].carrier, MockContacts.mCarrier);
@@ -691,12 +734,32 @@ suite('dialer/handled_call', function() {
     assert.equal(subject.numberNode.textContent, 'switch-calls');
   });
 
-  test('should display emergency number label', function() {
-    mockCall = new MockCall('112', 'dialing');
-    mockCall.emergency = true;
-    subject = new HandledCall(mockCall);
+  suite('Emergency Call layout', function() {
+    setup(function() {
+      MockCallScreen.mSetEmergencyWallpaperCalled = false;
+    });
 
-    assert.equal(subject.numberNode.textContent, 'emergencyNumber');
+    test('should display emergency number label', function() {
+      mockCall = new MockCall('112', 'dialing');
+      mockCall.emergency = true;
+      subject = new HandledCall(mockCall);
+
+      assert.equal(subject.numberNode.textContent, 'emergencyNumber');
+    });
+
+    test('should display emergency Wallpaper', function() {
+      mockCall = new MockCall('112', 'dialing');
+      subject = new HandledCall(mockCall);
+
+      assert.isTrue(MockCallScreen.mSetEmergencyWallpaperCalled);
+    });
+
+    test('should not display emergency wallpaper for normal calls', function() {
+      mockCall = new MockCall('111', 'dialing');
+      subject = new HandledCall(mockCall);
+
+      assert.isFalse(MockCallScreen.mSetEmergencyWallpaperCalled);
+    });
   });
 
   test('should display voicemail label', function() {
@@ -827,6 +890,55 @@ suite('dialer/handled_call', function() {
     });
   });
 
+  suite('caller photo', function() {
+    setup(function() {
+      MockCallScreen.mSetCallerContactImageCalled = false;
+    });
+
+    test('should reset photo when no contact info exists', function() {
+      mockCall = new MockCall('111', 'incoming');
+      subject = new HandledCall(mockCall);
+
+      assert.isTrue(MockCallScreen.mSetCallerContactImageCalled);
+      assert.isNull(MockCallScreen.mSetCallerContactImageArg);
+    });
+
+    test('should reset photo for withheld number', function() {
+      mockCall = new MockCall('', 'incoming');
+      subject = new HandledCall(mockCall);
+
+      assert.isTrue(MockCallScreen.mSetCallerContactImageCalled);
+      assert.isNull(MockCallScreen.mSetCallerContactImageArg);
+    });
+
+    test('should reset photo for more than 1 calls in CDMA', function() {
+      mockCall = new MockCall('888', 'connected');
+      subject = new HandledCall(mockCall);
+      mockCall.secondNumber = '999';
+      subject.updateCallNumber();
+
+      assert.isTrue(MockCallScreen.mSetCallerContactImageCalled);
+      assert.isNull(MockCallScreen.mSetCallerContactImageArg);
+    });
+
+    test('should reset photo for emergency number', function() {
+      mockCall = new MockCall('112', 'dialing');
+      mockCall.emergency = true;
+      subject = new HandledCall(mockCall);
+
+      assert.isTrue(MockCallScreen.mSetCallerContactImageCalled);
+      assert.isNull(MockCallScreen.mSetCallerContactImageArg);
+    });
+
+    test('should reset photo for voicemail', function() {
+      mockCall = new MockCall('123', 'dialing');
+      subject = new HandledCall(mockCall);
+
+      assert.isTrue(MockCallScreen.mSetCallerContactImageCalled);
+      assert.isNull(MockCallScreen.mSetCallerContactImageArg);
+    });
+  });
+
   suite('explicit visibility', function() {
     test('calling show should show the node', function() {
       subject.node.hidden = true;
@@ -884,13 +996,40 @@ suite('dialer/handled_call', function() {
       mockCall.group = this.sinon.stub();
       mockCall.ongroupchange(mockCall);
       assert.isTrue(moveToGroupSpy.calledWith(subject.node));
+      assert.isFalse(MockCallScreen.mShowStatusMessageCalled);
     });
 
-    test('when leaving a group, it should ask the CallScreen to move back',
+    test('when leaving a group but still connected, it should move back to ' +
+         'the CallScreen but not show any status message on disconnect.',
     function() {
       mockCall.group = null;
       mockCall.ongroupchange(mockCall);
       assert.isTrue(insertCallSpy.calledWith(subject.node));
+      mockCall._disconnect();
+      assert.isFalse(MockCallScreen.mShowStatusMessageCalled);
+    });
+
+    test('when leaving a group by hanging up, it shouldn\'t move back to the' +
+         'CallScreen and show a status message.', function() {
+      mockCall.group = null;
+      mockCall.state = 'disconnecting';
+      mockCall.ongroupchange(mockCall);
+      assert.isFalse(insertCallSpy.calledWith(subject.node));
+      assert.isFalse(MockCallScreen.mShowStatusMessageCalled);
+      mockCall._disconnect();
+      assert.isTrue(MockCallScreen.mShowStatusMessageCalled);
+    });
+
+    test('when leaving a group by hanging up the whole group calls, it ' +
+         ' shouldn\'t move back and shouldn\'t show any status message.',
+    function() {
+      mockCall.group = null;
+      mockCall.state = 'disconnecting';
+      subject.node.dataset.groupHangup = 'groupHangup';
+      mockCall.ongroupchange(mockCall);
+      assert.isFalse(insertCallSpy.calledWith(subject.node));
+      mockCall._disconnect();
+      assert.isFalse(MockCallScreen.mShowStatusMessageCalled);
     });
   });
 
@@ -913,6 +1052,36 @@ suite('dialer/handled_call', function() {
                                                   'mergeActiveCallWith');
       subject.mergeButton.onclick();
       assert.isTrue(mergeActiveCallWithSpy.calledWith(subject.call));
+    });
+  });
+
+  suite('DSDS SIM display >', function() {
+    setup(function() {
+      MockNavigatorMozIccManager.addIcc('12345', {'cardState': 'ready'});
+    });
+
+    suite('One SIM >', function() {
+      test('should hide the sim node', function() {
+        mockCall = new MockCall('888', 'outgoing');
+        subject = new HandledCall(mockCall);
+
+        assert.isTrue(subject.simNode.hidden);
+      });
+    });
+
+    suite('Multiple SIMs >', function() {
+      setup(function() {
+        MockNavigatorMozIccManager.addIcc('424242', {'cardState': 'ready'});
+      });
+
+      test('should show which sim is in use', function() {
+        mockCall = new MockCall('888', 'outgoing');
+        subject = new HandledCall(mockCall);
+
+        assert.isFalse(subject.simNode.hidden);
+        assert.equal(subject.simNode.textContent, 'via-sim');
+        assert.deepEqual(MockLazyL10n.keys['via-sim'], {n: 2});
+      });
     });
   });
 });

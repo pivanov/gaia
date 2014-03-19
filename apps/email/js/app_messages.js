@@ -1,5 +1,5 @@
 /*jshint browser: true */
-/*global define, console */
+/*global define, console, Notification */
 define(function(require) {
   var appSelf = require('app_self'),
       evt = require('evt'),
@@ -46,21 +46,28 @@ define(function(require) {
       // To assist in bug analysis, log the start of the activity here.
       console.log('Received activity: ' + activityName);
 
-      var data = {};
-      if (dataType === 'url' && activityName === 'share') {
-        data.body = url;
-      } else {
-        var urlParts = url ? queryURI(url) : [];
-        data.to = urlParts[0];
-        data.subject = urlParts[1];
-        data.body = typeof urlParts[2] === 'string' ? urlParts[2] : null;
-        data.cc = urlParts[3];
-        data.bcc = urlParts[4];
-        data.attachmentBlobs = sourceData.blobs;
-        data.attachmentNames = sourceData.filenames;
-      }
+      // Dynamically load util, since it is only needed for certain
+      // pathways in this module.
+      require(['attachment_name'], function(attachmentName) {
+        var data = {};
+        if (dataType === 'url' && activityName === 'share') {
+          data.body = url;
+        } else {
+          var urlParts = url ? queryURI(url) : [];
+          data.to = urlParts[0];
+          data.subject = urlParts[1];
+          data.body = typeof urlParts[2] === 'string' ? urlParts[2] : null;
+          data.cc = urlParts[3];
+          data.bcc = urlParts[4];
+          data.attachmentBlobs = sourceData.blobs || [];
+          data.attachmentNames = sourceData.filenames || [];
 
-      this.emitWhenListener('activity', activityName, data, req);
+          attachmentName.ensureNameList(data.attachmentBlobs,
+                                     data.attachmentNames);
+        }
+
+        this.emitWhenListener('activity', activityName, data, req);
+      }.bind(this));
     },
 
     onNotification: function(msg) {
@@ -70,6 +77,25 @@ define(function(require) {
       // interesting, at least for the purposes here.
       if (!msg.clicked)
         return;
+
+      // Need to manually get all notifications and close the one
+      // that triggered this event due to fallout from 890440 and
+      // 966481.
+      if (typeof Notification !== 'undefined' && Notification.get) {
+        Notification.get().then(function(notifications) {
+          if (notifications) {
+            notifications.some(function(notification) {
+              // Compare tags, as the tag is based on the account ID and
+              // we only have one notification per account. Plus, there
+              // is no "id" field on the notification.
+              if (notification.tag === msg.tag && notification.close) {
+                notification.close();
+                return true;
+              }
+            });
+          }
+        });
+      }
 
       // icon url parsing is a cray cray way to pass day day
       var data = queryString.toObject((msg.imageURL || '').split('#')[1]);

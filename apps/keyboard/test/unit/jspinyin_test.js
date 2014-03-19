@@ -7,7 +7,6 @@ requireApp('keyboard/test/unit/setup_engine.js');
 requireApp('keyboard/js/imes/jspinyin/jspinyin.js');
 
 suite('jspinyin', function() {
-  this.timeout(10000);  // 10 secs
 
   var NUMBER_OF_CANDIDATES_PER_ROW = 8;
 
@@ -285,7 +284,8 @@ suite('jspinyin', function() {
   });
 
   test('select first predict', function(done) {
-    this.sinon.stub(glue, 'sendString', function(text) {
+    this.sinon.stub(jspinyin, '_start');
+    this.sinon.stub(glue, 'endComposition', function(text) {
       done(function() {
         assert.equal(text, firstPredict[0]);
       });

@@ -48,7 +48,7 @@ input[type="image"] {
   position: absolute;
   left: 0;
   top: 0;
-  background-color: #eeefea;
+  background-color: #f4f4f4;
   width: 100%;
   height: 100%;
   z-index: 150;
@@ -273,7 +273,6 @@ input[type="image"] {
 #url-bar {
   display: -moz-box;
   -moz-box-orient: horizontal;
-  margin: 1rem;
   border: 0.1rem solid #c1c5ce;
   border-radius: 0.5rem;
   height: 3.4rem;
@@ -289,13 +288,14 @@ input[type="image"] {
 }
 
 #url-button {
-  background-position: center;
   display: none;
   height: 3.2rem;
-  width: 3.2rem;
+  width: 2.6rem;
   background-size: 3rem;
   float: right;
   background-repeat: no-repeat;
+  background-position: right center;
+  margin-left: 0.6rem;
 }
 
 #ssl-indicator {
@@ -326,12 +326,11 @@ input[type="image"] {
   height: 3.4rem;
   -moz-box-flex: 1;
   margin: 0;
-  padding: 0;
+  padding: 0 0.6rem 0 0;
   border: none;
   background-color: transparent;
   background: none;
   text-overflow: ellipsis;
-  padding: 0 0;
   width: calc(100% - 3.2rem);
 }
 
@@ -710,7 +709,7 @@ a.recommend[role="button"]:active  {
 #bookmark-entry-sheet {
   z-index: 101;
   display: block;
-  position: absolute;
+  position: fixed;
   top: 0;
   width: 100%;
   height: 100%;

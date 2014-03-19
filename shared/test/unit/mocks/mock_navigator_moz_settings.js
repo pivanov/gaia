@@ -1,15 +1,7 @@
 'use strict';
 
 (function(window) {
-  var observers = {},
-      // Set default message size with 300KB
-      settings = {
-        'dom.mms.operatorSizeLimitation' : 300,
-        'homegesture.enabled': false,
-        'software-button.enabled': false
-      },
-      removedObservers = {},
-      requests = [];
+  var observers, settings, removedObservers, requests;
 
   function mns_mLockSet(obj) {
     // Set values.
@@ -25,7 +17,18 @@
       );
     }
 
-    return {};
+    var req = {
+      onsuccess: null,
+      onerror: null
+    };
+
+    setTimeout(function() {
+      if (req.onsuccess) {
+        req.onsuccess();
+      }
+    });
+
+    return req;
   }
 
   function mns_clearRequests() {
@@ -95,7 +98,7 @@
   function mns_mTriggerObservers(name, args) {
     var theseObservers = observers[name];
 
-    if (! theseObservers) {
+    if (!theseObservers) {
       return;
     }
 
@@ -104,12 +107,23 @@
     });
   }
 
-  function mns_teardown() {
+  function mns_reset() {
     observers = {};
-    settings = {};
+    // Set default message size with 300KB
+    settings = {
+      'dom.mms.operatorSizeLimitation' : 300
+    };
     removedObservers = {};
     requests = [];
   }
+
+  function mns_set(obj) {
+    for (var p in obj) {
+      settings[p] = obj[p];
+    }
+  }
+
+  mns_reset();
 
   window.MockNavigatorSettings = {
     addObserver: mns_addObserver,
@@ -119,8 +133,10 @@
     mClearRequests: mns_clearRequests,
     mReplyToRequests: mns_mReplyToRequests,
     mTriggerObservers: mns_mTriggerObservers,
-    mTeardown: mns_teardown,
+    mSetup: mns_reset,
+    mTeardown: mns_reset,
     mSyncRepliesOnly: false,
+    mSet: mns_set,
 
     get mObservers() {
       return observers;

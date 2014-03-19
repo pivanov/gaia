@@ -8,8 +8,20 @@ var MockThreadUI = {
   CHUNK_SIZE: 10,
   CONVERTED_MESSAGE_DURATION: 3000,
   IMAGE_RESIZE_DURATION: 3000,
-  recipients: null,
+  recipients: {
+    add: function() {},
+    focus: function() {}
+  },
   recipientsList: document.createElement('div'),
+
+  // For Information view testing. Need to be updated with ThreadUI layout
+  optionsIcon: document.createElement('a'),
+  attachButton: document.createElement('a'),
+  subheader: document.createElement('div'),
+  container: document.createElement('article'),
+  composeForm: document.createElement('form'),
+  headerText: document.createElement('h1'),
+
   inEditMode: false,
   inThread: false,
   init: function() {},
@@ -25,7 +37,6 @@ var MockThreadUI = {
   resetActivityRequestMode: function() {},
   getAllInputs: function() {},
   getSelectedInputs: function() {},
-  setMessageBody: function() {},
   messageComposerInputHandler: function() {},
   assimilateRecipients: function() {},
   messageComposerTypeHandler: function() {},
@@ -36,14 +47,14 @@ var MockThreadUI = {
   isScrolledManually: false,
   manageScroll: function() {},
   scrollViewToBottom: function() {},
-  setInputMaxHeight: function() {},
+  updateInputMaxHeight: function() {},
   back: function() {},
   isKeyboardDisplayed: function() {},
   enableSend: function() {},
   updateSmsSegmentLimit: function() {},
   updateCounter: function() {},
   updateCounterForMms: function() {},
-  updateInputHeight: function() {},
+  updateElementsHeight: function() {},
   getMessageContainer: function() {},
   updateHeaderData: function() {},
   initializeRendering: function() {},
@@ -67,10 +78,12 @@ var MockThreadUI = {
   handleEvent: function() {},
   cleanFields: function() {},
   onSendClick: function() {},
+  onBeforeEnter: function() {},
   onMessageSending: function() {},
   onMessageSent: function() {},
   onMessageFailed: function() {},
   onDeliverySuccess: function() {},
+  onReadSuccess: function() {},
   removeMessageDOM: function() {},
   retrieveMMS: function() {},
   resendMessage: function() {},
@@ -81,21 +94,19 @@ var MockThreadUI = {
   onHeaderActivation: function() {},
   onParticipantClick: function() {},
   promptContact: function() {},
-  groupView: function() {},
   prompt: function() {},
+  saveDraft: function() {},
   onCreateContact: function() {},
-  isShowSendMessageErrorCalledTimes: 0,
-  showSendMessageError: function() {
-    this.isShowSendMessageErrorCalledTimes += 1;
+  isShowMessageErrorCalledTimes: 0,
+  showMessageError: function() {
+    this.isShowMessageErrorCalledTimes += 1;
   },
   mSetup: function() {
-    this.isShowSendMessageErrorCalledTimes = 0;
+    this.isShowMessageErrorCalledTimes = 0;
     this.inThread = false;
   },
 
   mTeardown: function() {
-    this.isShowSendMessageErrorCalledTimes = 0;
+    this.isShowMessageErrorCalledTimes = 0;
   }
 };
-
-MockThreadUI.groupView.reset = function() {};

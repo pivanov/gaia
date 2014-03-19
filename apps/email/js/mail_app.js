@@ -49,6 +49,7 @@ var appMessages = require('app_messages'),
     common = require('mail_common'),
     evt = require('evt'),
     model = require('model'),
+    headerCursor = require('header_cursor').cursor,
     Cards = common.Cards,
     activityCallback = null;
 
@@ -197,6 +198,17 @@ function resetCards(cardId, args) {
     Cards.removeAllCards();
     pushStartCard(cardId, args);
   }
+}
+
+/*
+ * Determines if current card is a nonsearch message_list
+ * card, which is the default kind of card.
+ */
+function isCurrentCardMessageList() {
+  var cardType = Cards.getCurrentCardType();
+  return (cardType &&
+          cardType[0] === 'message_list' &&
+          cardType[1] === 'nonsearch');
 }
 
 /**
@@ -358,6 +370,21 @@ appMessages.on('activity', function(type, data, rawActivity) {
     activityCallback = initComposer;
   }
 
+  // Remove previous cards because the card stack could get
+  // weird if inserting a new card that would not normally be
+  // at that stack level. Primary concern: going to settings,
+  // then trying to add a compose card at that stack level.
+  // More importantly, the added card could have a "back"
+  // operation that does not mean "back to previous state",
+  // but "back in application flowchart". Message list is a
+  // good known jump point, so do not needlessly wipe that one
+  // out if it is the current one. Message list is a good
+  // known jump point, so do not needlessly wipe that one out
+  // if it is the current one.
+  if (!isCurrentCardMessageList()) {
+    Cards.removeAllCards();
+  }
+
   if (model.inited) {
     if (model.hasAccount()) {
       initComposer();
@@ -387,15 +414,29 @@ appMessages.on('notification', function(data) {
         waitForAppMessage = false;
       }
 
+      // Remove previous cards because the card stack could get
+      // weird if inserting a new card that would not normally be
+      // at that stack level. Primary concern: going to settings,
+      // then trying to add a reader or message list card at that
+      // stack level. More importantly, the added card could have
+      // a "back" operation that does not mean "back to previous
+      // state", but "back in application flowchart". Message
+      // list is a good known jump point, so do not needlessly
+      // wipe that one out if it is the current one.
+      if (!isCurrentCardMessageList()) {
+        Cards.removeAllCards();
+      }
+
       if (type === 'message_list') {
         showMessageList({
           onPushed: onPushed
         });
       } else if (type === 'message_reader') {
-        Cards.pushCard(data.type, 'default', 'immediate', {
-          messageSuid: data.messageSuid,
-          backOnMissingMessage: true,
-          onPushed: onPushed
+        headerCursor.setCurrentMessageBySuid(data.messageSuid);
+
+        Cards.pushCard(type, 'default', 'immediate', {
+            messageSuid: data.messageSuid,
+            onPushed: onPushed
         });
       } else {
         console.error('unhandled notification type: ' + type);

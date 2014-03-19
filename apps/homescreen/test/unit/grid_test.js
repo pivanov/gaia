@@ -37,7 +37,6 @@ var mocksHelperForGrid = new MocksHelper([
   'HIDDEN_APPS',
   'ManifestHelper',
   'getDefaultIcon',
-  'Configurator',
   'Bookmark'
 ]).init();
 
@@ -196,7 +195,7 @@ suite('grid.js >', function() {
 
         this.sinon.clock.tick();
         var currentPage = document.getElementById('landing-page');
-        assert.equal(currentPage.style.MozTransform, '');
+        assert.equal(currentPage.style.MozTransform, 'translateX(0px)');
         sendTouchEvent('touchend', containerNode, move);
         sendMouseEvent('mouseup', containerNode, move);
       });
@@ -434,6 +433,63 @@ suite('grid.js >', function() {
         }, SAVE_STATE_WAIT_TIMEOUT);
       });
     }));
+  });
+
+  suite('onInstall event dispatch before SingleVariant will be ready >',
+        function() {
+    var mockAppSV;
+
+    var fixtures = [
+      [
+        {'index': 0, 'icons': []},
+        {'index': 1, 'icons': [
+          {'manifestURL': 'https://aHost/a_0_1_0',
+          'removable': true,
+          'name': 'Mock app',
+          'icon': 'http://inexistant.name/default_icon.png',
+          'isHosted': true,
+          'hasOfflineCache': false,
+          'desiredPos': 0}
+        ]}
+      ]
+    ];
+
+    var testCases = [
+      {
+        'name': 'Dispatch onInstall before SingleVariant is been ready',
+        'manifestURL' : 'https://aHost/aMan3'
+      }
+    ];
+
+    testCases.forEach(function(testCase, i) {
+      suite(testCase.name, function(done) {
+        setup(function(done) {
+          Configurator.mIsSVReady = false;
+          MockHomeState.mTestGrids = fixtures[i];
+          initGridManager(done);
+          MockHomeState.mLastSavedInstalledApps = null;
+        });
+
+        teardown(function() {
+          Configurator.mIsSVReady = true;
+        });
+
+        test('Should not been installed until SingleVariant is ready',
+             function() {
+          Configurator.mSimPresentOnFirstBoot = true;
+          mockAppSV = new MockApp({'manifestURL': testCase.manifestURL});
+
+          this.sinon.useFakeTimers();
+          MockAppsMgmt.mTriggerOninstall(mockAppSV);
+          this.sinon.clock.tick(SAVE_STATE_WAIT_TIMEOUT);
+
+          var grd = MockHomeState.mLastSavedGrid;
+          var svInstalled = MockHomeState.mLastSavedInstalledApps;
+          assert.ok(!grd, 'Grid is set');
+          assert.ok(!svInstalled, 'SV app has been saved');
+        });
+      });
+    });
   });
 
   suite('install single variant apps without SIM on first run >', function() {

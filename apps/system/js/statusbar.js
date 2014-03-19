@@ -6,12 +6,19 @@
 /**
  * Creates an object used for refreshing the clock UI element. Handles all
  * related timer manipulation (start/stop/cancel).
+ * @class  Clock
  */
 function Clock() {
-  /** One-shot timer used to refresh the clock at a minute's turn */
+  /**
+   * One-shot timer used to refresh the clock at a minute's turn
+   * @memberOf Clock
+   */
   this.timeoutID = null;
 
-  /** Timer used to refresh the clock every minute */
+  /**
+   * Timer used to refresh the clock every minute
+   * @memberOf Clock
+   */
   this.timerID = null;
 
   /**
@@ -22,6 +29,7 @@ function Clock() {
    *
    * @param {Function} refresh Function used to refresh the UI at every timer
    *        tick, should accept a date object as its only argument.
+   * @memberOf Clock
    */
   this.start = function cl_start(refresh) {
     var date = new Date();
@@ -44,6 +52,7 @@ function Clock() {
 
   /**
    * Stops the timer used to refresh the clock
+   * @memberOf Clock
    */
   this.stop = function cl_stop() {
     if (this.timeoutID != null) {
@@ -64,7 +73,7 @@ var StatusBar = {
     'battery', 'wifi', 'data', 'flight-mode', 'network-activity', 'tethering',
     'alarm', 'bluetooth', 'mute', 'headphones', 'bluetooth-headphones',
     'bluetooth-transferring', 'recording', 'sms', 'geolocation', 'usb', 'label',
-    'system-downloads', 'call-forwarding', 'playing', 'keyboard'],
+    'system-downloads', 'call-forwardings', 'playing'],
 
   /* Timeout for 'recently active' indicators */
   kActiveIndicatorTimeout: 5 * 1000,
@@ -127,8 +136,9 @@ var StatusBar = {
   get height() {
     if (this.screen.classList.contains('active-statusbar')) {
       return this.attentionBar.offsetHeight;
-    } else if (this.screen.classList.contains('fullscreen-app') ||
-        document.mozFullScreen) {
+    } else if (document.mozFullScreen ||
+               (AppWindowManager.getActiveApp() &&
+                AppWindowManager.getActiveApp().isFullScreen())) {
       return 0;
     } else {
       return this._cacheHeight ||
@@ -136,8 +146,20 @@ var StatusBar = {
     }
   },
 
+  show: function sb_show() {
+    this.element.classList.remove('invisible');
+  },
+
+  hide: function sb_hide() {
+    this._releaseBar();
+    this.element.classList.add('invisible');
+  },
+
   init: function sb_init() {
     this.getAllElements();
+
+    // cache height.
+    this._cacheHeight = this.element.getBoundingClientRect().height;
 
     this.listeningCallschanged = false;
 
@@ -156,7 +178,8 @@ var StatusBar = {
       'audio.volume.notification': ['mute'],
       'alarm.enabled': ['alarm'],
       'vibration.enabled': ['vibration'],
-      'ril.cf.enabled': ['callForwarding']
+      'ril.cf.enabled': ['callForwarding'],
+      'operatorResources.data.icon': ['iconData']
     };
 
     var self = this;
@@ -178,10 +201,14 @@ var StatusBar = {
     // Listen to 'attentionscreenshow/hide' from attention_screen.js
     window.addEventListener('attentionscreenshow', this);
     window.addEventListener('attentionscreenhide', this);
+
+    window.addEventListener('utilitytrayshow', this);
+    window.addEventListener('utilitytrayhide', this);
+    window.addEventListener('rocketbarshown', this);
+    window.addEventListener('rocketbarhidden', this);
+
     // Listen to 'screenchange' from screen_manager.js
     window.addEventListener('screenchange', this);
-    window.addEventListener('appwillopen', this);
-    window.addEventListener('homescreenopening', this);
 
     // mozChromeEvent fired from Gecko is earlier been loaded,
     // so we use mozAudioChannelManager to
@@ -194,6 +221,8 @@ var StatusBar = {
 
     // Listen to 'geolocation-status' and 'recording-status' mozChromeEvent
     window.addEventListener('mozChromeEvent', this);
+    // Listen to Custom event send by 'media_recording.js'
+    window.addEventListener('recordingEvent', this);
 
     // 'bluetoothconnectionchange' fires when the overall bluetooth connection
     //  changes.
@@ -212,9 +241,13 @@ var StatusBar = {
     window.addEventListener('unlock', this);
     window.addEventListener('lockpanelchange', this);
 
-    // Listen to the IME switcher shows/hide
-    window.addEventListener('keyboardimeswitchershow', this);
-    window.addEventListener('keyboardimeswitcherhide', this);
+    window.addEventListener('appopened', this);
+    window.addEventListener('homescreenopened', this.show.bind(this));
+
+    var touchEvents = ['touchstart', 'touchmove', 'touchend'];
+    touchEvents.forEach(function bindEvents(name) {
+      this.topPanel.addEventListener(name, this.panelTouchHandler.bind(this));
+    }, this);
 
     this.systemDownloadsCount = 0;
     this.setActive(true);
@@ -222,18 +255,57 @@ var StatusBar = {
 
   handleEvent: function sb_handleEvent(evt) {
     switch (evt.type) {
+      case 'appopened':
+        var app = evt.detail;
+        if (app.isFullScreen()) {
+          this.hide();
+        } else {
+          this.show();
+        }
+        break;
+
       case 'screenchange':
         this.setActive(evt.detail.screenEnabled);
         break;
-      case 'attentionscreenhide':
+
       case 'lock':
         // Hide the clock in the statusbar when screen is locked
-        this.toggleTimeLabel(!LockScreen.locked);
+        this.toggleTimeLabel(!window.lockScreen ||
+            !window.lockScreen.locked);
         break;
-      case 'attentionscreenshow':
+
       case 'unlock':
         // Display the clock in the statusbar when screen is unlocked
         this.toggleTimeLabel(true);
+        break;
+
+      case 'attentionscreenshow':
+        // Display the clock in the statusbar when screen is unlocked
+        this.toggleTimeLabel(true);
+        this.show();
+        break;
+
+      case 'attentionscreenhide':
+        // Hide the clock in the statusbar when screen is locked
+        this.toggleTimeLabel(!window.lockScreen ||
+            !window.lockScreen.locked);
+        var app = AppWindowManager.getActiveApp();
+        if (app && app.isFullScreen()) {
+          this.hide();
+        }
+        break;
+
+      case 'utilitytrayshow':
+      case 'rocketbarshown':
+        this.show();
+        break;
+
+      case 'utilitytrayhide':
+      case 'rocketbarhidden':
+        var app = AppWindowManager.getActiveApp();
+        if (app && app.isFullScreen()) {
+          this.hide();
+        }
         break;
 
       case 'lockpanelchange':
@@ -266,7 +338,7 @@ var StatusBar = {
         this.update.data.call(this);
         break;
 
-      case 'iccinfochange':
+      case 'simslot-iccinfochange':
         this.update.label.call(this);
         break;
 
@@ -293,12 +365,13 @@ var StatusBar = {
         }).bind(this));
         break;
 
-      case 'keyboardimeswitchershow':
-        this.toggleKeyboardLabel(true);
-        break;
-
-      case 'keyboardimeswitcherhide':
-        this.toggleKeyboardLabel(false);
+      case 'recordingEvent':
+        switch (evt.detail.type) {
+          case 'recording-state-changed':
+            this.recordingActive = evt.detail.active;
+            this.update.recording.call(this);
+            break;
+        }
         break;
 
       case 'mozChromeEvent':
@@ -306,11 +379,6 @@ var StatusBar = {
           case 'geolocation-status':
             this.geolocationActive = evt.detail.active;
             this.update.geolocation.call(this);
-            break;
-
-          case 'recording-status':
-            this.recordingActive = evt.detail.active;
-            this.update.recording.call(this);
             break;
 
           case 'volume-state-changed':
@@ -335,14 +403,114 @@ var StatusBar = {
       case 'moznetworkdownload':
         this.update.networkActivity.call(this);
         break;
+    }
+  },
 
-      case 'appwillopen':
-        this.element.classList.add('semi-transparent');
+  _startX: null,
+  _startY: null,
+  _releaseTimeout: null,
+  _touchStart: null,
+  _touchForwarder: new TouchForwarder(),
+  _shouldForwardTap: false,
+  panelTouchHandler: function sb_panelTouchHandler(evt) {
+
+    // Do not forward events if FTU is running
+    if (FtuLauncher.isFtuRunning()) {
+      return;
+    }
+
+    evt.preventDefault();
+
+    var elem = this.element;
+    switch (evt.type) {
+      case 'touchstart':
+        clearTimeout(this._releaseTimeout);
+
+        var iframe = AppWindowManager.getActiveApp().iframe;
+        this._touchForwarder.destination = iframe;
+        this._touchStart = evt;
+        this._shouldForwardTap = true;
+
+
+        var touch = evt.changedTouches[0];
+        this._startX = touch.clientX;
+        this._startY = touch.clientY;
+        elem.style.transition = 'transform';
+        elem.classList.add('dragged');
         break;
-      case 'homescreenopening':
-        this.element.classList.remove('semi-transparent');
+
+      case 'touchmove':
+        var touch = evt.touches[0];
+        var height = this.height || this._cacheHeight;
+        var deltaX = touch.clientX - this._startX;
+        var deltaY = touch.clientY - this._startY;
+
+        if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+          this._shouldForwardTap = false;
+        }
+
+        var translate = Math.min(deltaY, height);
+        elem.style.transform = 'translateY(calc(' + translate + 'px - 100%)';
+
+        if (translate == height) {
+          if (this._touchStart) {
+            this._touchForwarder.forward(this._touchStart);
+            this._touchStart = null;
+          }
+          this._touchForwarder.forward(evt);
+        }
+        break;
+
+      case 'touchend':
+        clearTimeout(this._releaseTimeout);
+
+        if (this._touchStart) {
+          if (this._shouldForwardTap) {
+            this._touchForwarder.forward(this._touchStart);
+            this._touchForwarder.forward(evt);
+            this._touchStart = null;
+          }
+          this._releaseBar();
+        } else {
+          // If we already forwarded the touchstart it means the bar
+          // if fully open, releasing after a timeout.
+          this._touchForwarder.forward(evt);
+          this._releaseAfterTimeout();
+        }
+
         break;
     }
+  },
+
+  _releaseBar: function sb_releaseBar() {
+    var elem = this.element;
+    elem.style.transform = '';
+    elem.style.transition = '';
+    elem.addEventListener('transitionend', function trWait() {
+      elem.removeEventListener('transitionend', trWait);
+      elem.classList.remove('dragged');
+    });
+
+    clearTimeout(this._releaseTimeout);
+    this._releaseTimeout = null;
+  },
+
+  _releaseAfterTimeout: function sb_releaseAfterTimeout() {
+    var self = this;
+    self._releaseTimeout = setTimeout(function() {
+      self._releaseBar();
+      window.removeEventListener('touchstart', closeOnTap);
+    }, 5000);
+
+    function closeOnTap(evt) {
+      if (evt.target != self._touchForwarder.destination) {
+        return;
+      }
+
+      window.removeEventListener('touchstart', closeOnTap);
+      self._releaseBar();
+    };
+    window.addEventListener('touchstart', closeOnTap);
   },
 
   setActive: function sb_setActive(active) {
@@ -367,9 +535,7 @@ var StatusBar = {
         });
       }
 
-      if (IccHelper) {
-        IccHelper.addEventListener('iccinfochange', this);
-      }
+      window.addEventListener('simslot-iccinfochange', this);
 
       window.addEventListener('wifi-statuschange',
                               this.update.wifi.bind(this));
@@ -386,7 +552,8 @@ var StatusBar = {
 
       this.refreshCallListener();
 
-      this.toggleTimeLabel(!LockScreen.locked);
+      this.toggleTimeLabel(!window.lockScreen ||
+          !window.lockScreen.locked);
     } else {
       var battery = window.navigator.battery;
       if (battery) {
@@ -403,9 +570,7 @@ var StatusBar = {
         });
       }
 
-      if (IccHelper) {
-        IccHelper.removeEventListener('iccinfochange', this);
-      }
+      window.removeEventListener('simslot-iccinfochange', this);
 
       window.removeEventListener('moznetworkupload', this);
       window.removeEventListener('moznetworkdownload', this);
@@ -418,6 +583,20 @@ var StatusBar = {
   },
 
   update: {
+    iconData: function sb_updateIconData(aData) {
+      var dataIconValues = this.settingValues['operatorResources.data.icon'];
+      if (!dataIconValues) {
+        return;
+      }
+
+      for (var key in dataIconValues) {
+        //Change only dataIcon values that actually really know
+        if (this.mobileDataIconTypes[key]) {
+          this.mobileDataIconTypes[key] = dataIconValues[key];
+        }
+      }
+    },
+
     label: function sb_updateLabel() {
       var conns = window.navigator.mozMobileConnections;
       var conn;
@@ -459,9 +638,9 @@ var StatusBar = {
       var f = new navigator.mozL10n.DateTimeFormat();
       var sec = now.getSeconds();
 
-      var formated = f.localeFormat(now, _('shortTimeFormat'));
-      formated = formated.replace(/\s?(AM|PM)\s?/i, '<span>$1</span>');
-      this.icons.time.innerHTML = formated;
+      var timeFormat = _('shortTimeFormat').replace('%p', '<span>%p</span>');
+      var formatted = f.localeFormat(now, timeFormat);
+      this.icons.time.innerHTML = formatted;
 
       var label = this.icons.label;
       var l10nArgs = JSON.parse(label.dataset.l10nArgs || '{}');
@@ -497,13 +676,11 @@ var StatusBar = {
     },
 
     signal: function sb_updateSignal() {
-      var conns = window.navigator.mozMobileConnections;
-      if (!conns)
-        return;
-
       var self = this;
-      for (var index = 0; index < conns.length; index++) {
-        var conn = conns[index];
+      var simSlots = SIMSlotManager.getSlots();
+      for (var index = 0; index < simSlots.length; index++) {
+        var simslot = simSlots[index];
+        var conn = simslot.conn;
         var voice = conn.voice;
         var data = conn.data;
         var icon = self.icons.signals[index];
@@ -523,10 +700,9 @@ var StatusBar = {
         flightModeIcon.hidden = true;
         icon.hidden = false;
 
-        if (!IccHelper.cardState) {
+        if (simslot.isAbsent()) {
           // no SIM
           delete icon.dataset.level;
-          delete icon.dataset.emergency;
           delete icon.dataset.searching;
           delete icon.dataset.roaming;
         } else if (data && data.connected && data.type.startsWith('evdo')) {
@@ -535,23 +711,26 @@ var StatusBar = {
           icon.dataset.level = Math.ceil(data.relSignalStrength / 20); // 0-5
           icon.dataset.roaming = data.roaming;
 
-          delete icon.dataset.emergency;
           delete icon.dataset.searching;
         } else if (voice.connected || self.hasActiveCall()) {
           // "Carrier" / "Carrier (Roaming)"
           icon.dataset.level = Math.ceil(voice.relSignalStrength / 20); // 0-5
           icon.dataset.roaming = voice.roaming;
 
-          delete icon.dataset.emergency;
           delete icon.dataset.searching;
+        } else if (simslot.isLocked()) {
+          // SIM locked
+          // We check if the sim card is locked after checking hasActiveCall
+          // because we still need to show the siganl bars in this case even
+          // the sim card is locked.
+          icon.hidden = true;
         } else {
           // "No Network" / "Emergency Calls Only (REASON)" / trying to connect
           icon.dataset.level = -1;
-          // logically, we should have "&& !voice.connected" as well but we
-          // already know this.
-          icon.dataset.searching = (!voice.emergencyCallsOnly &&
-                                    voice.state !== 'notSearching');
-          icon.dataset.emergency = (voice.emergencyCallsOnly);
+          // emergencyCallsOnly is always true if voice.connected is false. Show
+          // searching icon if the device is searching. Or show the signal bars
+          // with a red "x", which stands for emergency calls only.
+          icon.dataset.searching = (voice.state === 'searching');
           delete icon.dataset.roaming;
         }
       }
@@ -761,8 +940,13 @@ var StatusBar = {
     },
 
     callForwarding: function sb_updateCallForwarding() {
-      var icon = this.icons.callForwarding;
-      icon.hidden = !this.settingValues['ril.cf.enabled'];
+      var icons = this.icons.callForwardings;
+      var states = this.settingValues['ril.cf.enabled'];
+      if (states) {
+        states.forEach(function(state, index) {
+          icons[index].hidden = !state;
+        });
+      }
     },
 
     playing: function sb_updatePlaying() {
@@ -827,11 +1011,6 @@ var StatusBar = {
     icon.hidden = !enable;
   },
 
-  toggleKeyboardLabel: function sb_toggleKeyboardLabel(enable) {
-    var icon = this.icons.keyboard;
-    icon.hidden = !enable;
-  },
-
   updateNotification: function sb_updateNotification(count) {
     var icon = this.icons.notification;
     if (!count) {
@@ -885,11 +1064,12 @@ var StatusBar = {
         document.getElementById('statusbar-' + name);
     }).bind(this));
 
-    // Create signal elements based on the number of SIM slots.
     var conns = window.navigator.mozMobileConnections;
     if (conns) {
+      var multipleSims = SIMSlotManager.isMultiSIM();
+
+      // Create signal elements based on the number of SIM slots.
       var sbConnections = document.getElementById('statusbar-connections');
-      var multipleSims = (conns.length > 1);
       sbConnections.dataset.multiple = multipleSims;
       this.icons.signals = {};
       this.icons.data = {};
@@ -909,11 +1089,29 @@ var StatusBar = {
         this.icons.signals[i] = signal;
         this.icons.data[i] = data;
       }
+
+      // Create call forwarding icons
+      var sbCallForwardings =
+        document.getElementById('statusbar-call-forwardings');
+      sbCallForwardings.dataset.multiple = multipleSims;
+      this.icons.callForwardings = {};
+      for (var i = conns.length - 1; i >= 0; i--) {
+        var callForwarding = document.createElement('div');
+        callForwarding.className = 'sb-icon sb-icon-call-forwarding';
+        if (multipleSims) {
+          callForwarding.dataset.index = i + 1;
+        }
+
+        sbCallForwardings.appendChild(callForwarding);
+        this.icons.callForwardings[i] = callForwarding;
+      }
     }
 
     this.element = document.getElementById('statusbar');
     this.screen = document.getElementById('screen');
     this.attentionBar = document.getElementById('attention-bar');
+
+    this.topPanel = document.getElementById('top-panel');
   }
 };
 

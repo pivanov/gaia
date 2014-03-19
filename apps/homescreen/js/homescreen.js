@@ -37,15 +37,6 @@ var Homescreen = (function() {
       swipeTransitionDuration: swipeSection.transition_duration
     };
 
-    var wallpaperURL = new SettingsURL();
-
-    SettingsListener.observe('wallpaper.image',
-                             'resources/images/backgrounds/default.png',
-                             function(value) {
-                               var url = 'url(' + wallpaperURL.set(value) + ')';
-                               document.body.style.backgroundImage = url;
-                             });
-
     GridManager.init(options, function gm_init() {
       window.addEventListener('hashchange', function() {
         if (!window.location.hash.replace('#', '')) {
@@ -91,6 +82,7 @@ var Homescreen = (function() {
         iconGrid.addEventListener('click', onClickHandler);
       }
     } else if (!Homescreen.isInEditMode()) {
+      GridManager.cancelPanning();
       // No long press over an icon neither edit mode
       evt.preventDefault();
       var contextMenuEl = document.getElementById('contextmenu-dialog');
@@ -128,6 +120,9 @@ var Homescreen = (function() {
     GridManager.exitFromEditMode();
     if (typeof ConfirmDialog !== 'undefined') {
       ConfirmDialog.hide();
+    }
+    if (typeof EditDialog !== 'undefined') {
+      EditDialog.hide();
     }
   }
 
@@ -192,6 +187,19 @@ var Homescreen = (function() {
                        document.getElementById('confirm-dialog'),
                        'js/request.js'], function loaded() {
         ConfirmDialog.showApp(icon);
+      });
+    },
+
+    showEditBookmarkDialog: function h_showEditBookmarkDialog(icon) {
+      var dialog = document.getElementById('edit-dialog');
+      LazyLoader.load(['style/edit_dialog.css',
+                       'shared/style/headers.css',
+                       'shared/style/input_areas.css',
+                       'shared/js/url_helper.js',
+                       dialog,
+                       'js/edit_dialog.js'], function loaded() {
+        navigator.mozL10n.translate(dialog);
+        EditDialog.show(icon);
       });
     },
 

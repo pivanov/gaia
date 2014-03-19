@@ -1,12 +1,21 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- /
 /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 
+/* globals ContactPhotoHelper */
+
 (function(exports) {
   'use strict';
   var rdashes = /-(.)/g;
   var rescape = /[.?*+^$[\]\\(){}|-]/g;
   var rparams = /([^?=&]+)(?:=([^&]*))?/g;
   var rnondialablechars = /[^,#+\*\d]/g;
+  var downsamplingRefSize = {
+    // Estimate average Thumbnail size:
+    // 120 X 60 (max pixel) X 3 (full color) / 20 (average jpeg compress ratio)
+    // = 1080 (byte)
+    'thumbnail' : 1080
+    // TODO: For mms resizing
+  };
 
   var Utils = {
     date: {
@@ -104,8 +113,9 @@
 
         // Add photo
         if (include.photoURL) {
-          if (contact.photo && contact.photo[0]) {
-            details.photoURL = window.URL.createObjectURL(contact.photo[0]);
+          var photo = ContactPhotoHelper.getThumbnail(contact);
+          if (photo) {
+            details.photoURL = window.URL.createObjectURL(photo);
           }
         }
 
@@ -235,8 +245,8 @@
     removeNonDialables: function ut_removeNonDialables(input) {
       return input.replace(rnondialablechars, '');
     },
-    // @param {String} a First number string to compare.
-    // @param {String} b Second number string to compare.
+    // @param {String} a First recipient field.
+    // @param {String} b Second recipient field
     //
     // Based on...
     //  - ITU-T E.123 (http://www.itu.int/rec/T-REC-E.123-200102-I/)
@@ -247,6 +257,11 @@
     probablyMatches: function ut_probablyMatches(a, b) {
       var service = navigator.mozPhoneNumberService;
 
+      // String comparison starts here
+      if (typeof a !== 'string' || typeof b !== 'string') {
+        return false;
+      }
+
       if (service && service.normalize) {
         a = service.normalize(a);
         b = service.normalize(b);
@@ -256,6 +271,36 @@
       }
 
       return a === b || a.slice(-7) === b.slice(-7);
+    },
+
+    /**
+     * multiRecipientMatch
+     *
+     * Check multi-repients without regard to order
+     *
+     * @param {(String|string[])} a First recipient field.
+     * @param {(String|string[])} b Second recipient field.
+     *
+     * @return {Boolean} Return true if all recipients match.
+     */
+    multiRecipientMatch: function ut_multiRecipientMatch(a, b) {
+      // When ES6 syntax is allowed, replace with
+      // multiRecipientMatch([...a], [...b])
+      a = [].concat(a);
+      b = [].concat(b);
+      var blen = b.length;
+      if (a.length !== blen) {
+        return false;
+      }
+      // Check each recipient in a against each in b
+      // Allows for any order (and fails early)
+      return a.every(function(number) {
+        for (var i = 0; i < blen; i++) {
+          if (Utils.probablyMatches(number, b[i])) {
+            return true;
+          }
+        }
+      });
     },
 
     // Default image size limitation is set to 300KB for MMS user story.
@@ -316,7 +361,7 @@
         var canvas = document.createElement('canvas');
         canvas.width = targetWidth;
         canvas.height = targetHeight;
-        var context = canvas.getContext('2d');
+        var context = canvas.getContext('2d', { willReadFrequently: true });
 
         context.drawImage(img, 0, 0, targetWidth, targetHeight);
         // Bug 889765: Since we couldn't know the quality of the original jpg
@@ -350,6 +395,23 @@
         }
         canvas.toBlob(ensureSizeLimit, blob.type);
       };
+    },
+    // Return the url path with #-moz-samplesize postfix and downsampled image
+    // could be loaded directly from backend graphics lib.
+    getDownsamplingSrcUrl: function ut_getDownsamplingSrcUrl(options) {
+      var newUrl = options.url;
+      var size = options.size;
+      var ref = downsamplingRefSize[options.type];
+
+      if (size && ref) {
+        // Estimate average Thumbnail size
+        var ratio = Math.min(Math.sqrt(size / ref), 16);
+
+        if (ratio >= 2) {
+          newUrl += '#-moz-samplesize=' + Math.floor(ratio);
+        }
+      }
+      return newUrl;
     },
     camelCase: function ut_camelCase(str) {
       return str.replace(rdashes, function replacer(str, p1) {
@@ -466,6 +528,20 @@
       };
 
       return data;
+    },
+
+    /*
+      TODO: It's workaround to avoid url revoke bug. Need platform fixing
+            to remove the async load/remove.(Please ref bug 972245)
+    */
+    asyncLoadRevokeURL: function(url) {
+      setTimeout(function() {
+        var image = new Image();
+        image.src = url;
+        image.onload = image.onerror = function revokePhotoURL() {
+          window.URL.revokeObjectURL(this.src);
+        };
+      });
     }
   };
 

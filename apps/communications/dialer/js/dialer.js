@@ -12,23 +12,6 @@ var CallHandler = (function callHandler() {
   /* === Settings === */
   var screenState = null;
 
-  // Add the listener onload
-  window.addEventListener('load', function getSettingsListener() {
-    window.removeEventListener('load', getSettingsListener);
-
-    setTimeout(function nextTick() {
-      LazyLoader.load('/shared/js/settings_listener.js', function() {
-        SettingsListener.observe('lockscreen.locked', null, function(value) {
-          if (value) {
-            screenState = 'locked';
-          } else {
-            screenState = 'unlocked';
-          }
-        });
-      });
-    });
-  });
-
   /* === WebActivity === */
   function handleActivity(activity) {
     // Workaround here until the bug 787415 is fixed
@@ -40,25 +23,12 @@ var CallHandler = (function callHandler() {
     currentActivity = activity;
 
     var number = activity.source.data.number;
-    var fillNumber = function actHandleDisplay() {
-      if (number) {
-        KeypadManager.updatePhoneNumber(number, 'begin', false);
-        if (window.location.hash != '#keyboard-view') {
-          window.location.hash = '#keyboard-view';
-        }
+    if (number) {
+      KeypadManager.updatePhoneNumber(number, 'begin', false);
+      if (window.location.hash != '#keyboard-view') {
+        window.location.hash = '#keyboard-view';
       }
-    };
-
-    if (document.readyState == 'complete') {
-      fillNumber();
-    } else {
-      window.addEventListener('load', function loadWait() {
-        window.removeEventListener('load', loadWait);
-        fillNumber();
-      });
     }
-
-    activity.postResult({ status: 'accepted' });
   }
 
   /* === Notifications support === */
@@ -80,11 +50,16 @@ var CallHandler = (function callHandler() {
     };
   }
 
-  function handleNotificationRequest(number) {
+  function handleNotificationRequest(number, serviceId) {
     LazyLoader.load('/dialer/js/utils.js', function() {
       Contacts.findByNumber(number, function lookup(contact, matchingTel) {
         LazyL10n.get(function localized(_) {
-          var title = _('missedCall');
+          var title;
+          if (navigator.mozIccManager.iccIds.length > 1) {
+            title = _('missedCallMultiSims', {n: serviceId + 1});
+          } else {
+            title = _('missedCall');
+          }
 
           var body;
           if (!number) {
@@ -109,13 +84,13 @@ var CallHandler = (function callHandler() {
             var app = evt.target.result;
 
             var iconURL = NotificationHelper.getIconURI(app, 'dialer');
-
             var clickCB = function() {
               app.launch('dialer');
               window.location.hash = '#call-log-view';
             };
-
-            NotificationHelper.send(title, body, iconURL, clickCB);
+            var notification =
+              new Notification(title, {body: body, icon: iconURL});
+            notification.addEventListener('click', clickCB);
           };
         });
       });
@@ -249,7 +224,7 @@ var CallHandler = (function callHandler() {
     } else if (data.type === 'notification') {
       // We're being asked to send a missed call notification
       NavbarManager.ensureResources(function() {
-        handleNotificationRequest(data.number);
+        handleNotificationRequest(data.number, data.serviceId);
       });
     } else if (data.type === 'recent') {
       NavbarManager.ensureResources(function() {
@@ -266,7 +241,7 @@ var CallHandler = (function callHandler() {
   window.addEventListener('message', handleMessage);
 
   /* === Calls === */
-  function call(number) {
+  function call(number, cardIndex) {
     if (MmiManager.isMMI(number)) {
       MmiManager.send(number);
       // Clearing the code from the dialer screen gives the user immediate
@@ -285,6 +260,7 @@ var CallHandler = (function callHandler() {
 
     var error = function() {
       shouldCloseCallScreen = true;
+      KeypadManager.updatePhoneNumber(number, 'begin', true);
     };
 
     var oncall = function() {
@@ -301,8 +277,19 @@ var CallHandler = (function callHandler() {
       }
     };
 
-    LazyLoader.load('/dialer/js/telephony_helper.js', function() {
-      TelephonyHelper.call(number, oncall, connected, disconnected, error);
+    LazyLoader.load(['/dialer/js/telephony_helper.js',
+                     '/shared/js/sim_settings_helper.js'], function() {
+      // FIXME/bug 982163: Temporarily load a cardIndex from SimSettingsHelper
+      // if we were not given one as an argument.
+      if (cardIndex === undefined) {
+        SimSettingsHelper.getCardIndexFrom('outgoingCall', function(ci) {
+          TelephonyHelper.call(
+            number, ci, oncall, connected, disconnected, error);
+        });
+      } else {
+        TelephonyHelper.call(
+          number, cardIndex, oncall, connected, disconnected, error);
+      }
     });
   }
 
@@ -374,14 +361,14 @@ var CallHandler = (function callHandler() {
     btCommandsToForward = [];
   }
 
-  /* === MMI === */
   function init() {
+    /* === MMI === */
     LazyLoader.load(['/shared/js/mobile_operator.js',
                      '/dialer/js/mmi.js',
                      '/dialer/js/mmi_ui.js',
                      '/shared/style/headers.css',
                      '/shared/style/input_areas.css',
-                     '/shared/style_unstable/progress_activity.css',
+                     '/shared/style/progress_activity.css',
                      '/dialer/style/mmi.css'], function() {
 
       if (window.navigator.mozSetMessageHandler) {
@@ -401,11 +388,18 @@ var CallHandler = (function callHandler() {
               request.result.launch('dialer');
             };
           }
-
           MmiManager.handleMMIReceived(evt.message, evt.sessionEnded);
         });
       }
-
+    });
+    LazyLoader.load('/shared/js/settings_listener.js', function() {
+      SettingsListener.observe('lockscreen.locked', null, function(value) {
+        if (value) {
+          screenState = 'locked';
+        } else {
+          screenState = 'unlocked';
+        }
+      });
     });
   }
 
@@ -425,6 +419,9 @@ var NavbarManager = {
       // https://github.com/jcarpenter/Gaia-UI-Building-Blocks/blob/master/inprogress/tabs.html
       self.update();
     });
+
+    var contacts = document.getElementById('option-contacts');
+    contacts.addEventListener('click', this.contactsTabTap);
   },
   resourcesLoaded: false,
   /*
@@ -441,6 +438,7 @@ var NavbarManager = {
     LazyLoader.load(['/shared/js/async_storage.js',
                      '/shared/js/notification_helper.js',
                      '/shared/js/simple_phone_matcher.js',
+                     '/shared/js/contact_photo_helper.js',
                      '/dialer/js/contacts.js',
                      '/dialer/js/call_log.js',
                      '/dialer/style/call_log.css'], function rs_loaded() {
@@ -513,40 +511,24 @@ var NavbarManager = {
   show: function() {
     var views = document.getElementById('views');
     views.classList.remove('hide-toolbar');
+  },
+
+  contactsTabTap: function() {
+    // If we are not in the contacts-view, it's a first tap, do nothing
+    if (window.location.hash != '#contacts-view') {
+      return;
+    }
+    var contactsIframe = document.getElementById('iframe-contacts');
+    if (!contactsIframe) {
+      return;
+    }
+
+    var forceHashChange = new Date().getTime();
+    // Go back to contacts home
+    contactsIframe.src = '/contacts/index.html#home?forceHashChange=' +
+                         forceHashChange;
   }
 };
-
-var dialerStartup = function startup(evt) {
-  window.removeEventListener('load', dialerStartup);
-
-  KeypadManager.init();
-  NavbarManager.init();
-
-  setTimeout(function nextTick() {
-    var lazyPanels = ['add-contact-action-menu',
-                      'confirmation-message',
-                      'edit-mode'];
-
-    var lazyPanelsElements = lazyPanels.map(function toElement(id) {
-      return document.getElementById(id);
-    });
-    LazyLoader.load(lazyPanelsElements);
-
-    CallHandler.init();
-    LazyL10n.get(function loadLazyFilesSet() {
-      LazyLoader.load(['/shared/js/fb/fb_request.js',
-                       '/shared/js/fb/fb_data_reader.js',
-                       '/shared/js/fb/fb_reader_utils.js',
-                       '/shared/style/confirm.css',
-                       '/contacts/js/utilities/confirm.js',
-                       '/dialer/js/newsletter_manager.js',
-                       '/shared/style/edit_mode.css',
-                       '/shared/style/headers.css']);
-      lazyPanelsElements.forEach(navigator.mozL10n.translate);
-    });
-  });
-};
-window.addEventListener('load', dialerStartup);
 
 // Listening to the keyboard being shown
 // Waiting for issue 787444 being fixed

@@ -4,6 +4,7 @@ var CALENDAR_APP = 'app://calendar.gaiamobile.org';
 var CALENDAR_APP_MANIFEST = CALENDAR_APP + '/manifest.webapp';
 
 marionette('Notification.get():', function() {
+
   var client = marionette.client({
     settings: {
       'ftu.manifestURL': null
@@ -80,7 +81,8 @@ marionette('Notification.get():', function() {
           }
           var n = notifications[0];
           if (n.title !== title || n.tag !== options.tag) {
-            marionetteScriptFinished('tag filter returned wrong notification');
+            marionetteScriptFinished(
+              'tag filter returned wrong notification');
           }
           // success, return no error
           marionetteScriptFinished(false);
@@ -156,7 +158,8 @@ marionette('Notification.get():', function() {
     done();
   });
 
-  test('notifications should persist even after closing app', function(done) {
+  test('notifications should persist even after closing app',
+  function(done) {
     var title = 'test title:' + Date.now();
     var tag = 'test tag:' + Date.now();
 

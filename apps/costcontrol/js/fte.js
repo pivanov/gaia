@@ -12,22 +12,55 @@
   // Fallback from some values, just in case they are missed from configuration
   var DEFAULT_LOW_LIMIT_THRESHOLD = 3;
   var defaultLowLimitThreshold = DEFAULT_LOW_LIMIT_THRESHOLD;
-  window.addEventListener('DOMContentLoaded', function _onDOMReady() {
+  window.addEventListener('DOMContentLoaded', function _onDomReady() {
+    initLazyFTE();
+  });
+
+  function initLazyFTE() {
+    var SCRIPTS_NEEDED = [
+      'js/utils/debug.js',
+      'js/utils/formatting.js',
+      'js/utils/toolkit.js',
+      'js/common.js',
+      'js/costcontrol.js',
+      'js/costcontrol_init.js',
+      'js/config/config_manager.js',
+      'js/views/BalanceLowLimitView.js',
+      'js/view_manager.js',
+      'js/settings/limitdialog.js',
+      'js/settings/autosettings.js'
+    ];
+    LazyLoader.load(SCRIPTS_NEEDED, function onScriptsLoaded() {
+      Common.loadDataSIMIccId(_onIccReady);
+      Common.loadNetworkInterfaces();
+
+      parent.postMessage({
+        type: 'fte_ready',
+        data: ''
+      }, Common.COST_CONTROL_APP);
+
+      window.addEventListener('localized', _onLocalize);
+    });
+  }
+
+  function _onIccReady(iccid) {
     var stepsLeft = 2;
+    // Load iccInfo of current data simcard
+    var dataSimIccInfo = Common.dataSimIcc;
 
     // No SIM
-    if (!IccHelper || IccHelper.cardState === 'absent') {
+    if (!dataSimIccInfo || dataSimIccInfo.cardState === 'absent') {
       hasSim = false;
       trySetup();
 
     // SIM is not ready
-    } else if (IccHelper.cardState !== 'ready') {
-      debug('SIM not ready:', IccHelper.cardState);
-      IccHelper.oniccinfochange = _onDOMReady;
+    } else if (dataSimIccInfo.cardState !== 'ready') {
+      debug('SIM not ready:', dataSimIccInfo);
+      dataSimIccInfo.oniccinfochange = _onIccReady;
 
     // SIM is ready
     } else {
-      IccHelper.oniccinfochange = undefined;
+      dataSimIccInfo.oniccinfochange = undefined;
       trySetup();
     }
 
@@ -41,7 +74,7 @@
         setupFTE();
       }
     }
-  });
+  }
 
   var wizard, vmanager;
   var toStep2, step = 0;
@@ -54,6 +87,9 @@
       if (configuration && configuration.default_low_limit_threshold) {
         defaultLowLimitThreshold = configuration.default_low_limit_threshold;
       }
+
+      // Initialize resetTime and trackingPeriod to default values
+      ConfigManager.setOption({resetTime: 1, trackingPeriod: 'monthly' });
 
       AutoSettings.addType('data-limit', dataLimitConfigurer);
 
@@ -113,14 +149,28 @@
     });
   }
 
-  window.addEventListener('localized', function _onLocalize() {
+  function _onLocalize() {
     localizeWeekdaySelector(document.getElementById('pre3-select-weekday'));
     localizeWeekdaySelector(document.getElementById('post2-select-weekday'));
     localizeWeekdaySelector(document.getElementById('non2-select-weekday'));
-  });
+
+    function _setResetTimeToDefault(evt) {
+      var firstWeekDay = parseInt(navigator.mozL10n.get('weekStartsOnMonday'),
+                                  10);
+      var defaultResetTime = (evt.target.value === 'weekly') ? firstWeekDay : 1;
+      ConfigManager.setOption({ resetTime: defaultResetTime });
+    }
+
+    // Localized resetTime on trackingPeriod change
+    var trackingPeriodSelector = document
+                            .querySelectorAll('[data-option="trackingPeriod"]');
+    [].forEach.call(trackingPeriodSelector, function _reset(tPeriodSel) {
+      tPeriodSel.addEventListener('change', _setResetTimeToDefault);
+    });
+  }
 
   if (window.location.hash) {
-    var wizard = document.getElementById('firsttime-view');
+    wizard = document.getElementById('firsttime-view');
 
     if (window.location.hash === '#PREPAID' ||
         window.location.hash === '#POSTPAID') {
@@ -129,11 +179,6 @@
       wizard.querySelector('.nonauthed-sim').setAttribute('aria-hidden', false);
     }
   }
-
-  parent.postMessage({
-    type: 'fte_ready',
-    data: ''
-  }, Common.COST_CONTROL_APP);
 
   // TRACK SETUP
 

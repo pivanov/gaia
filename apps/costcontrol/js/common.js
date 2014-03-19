@@ -1,28 +1,33 @@
 
 'use strict';
 
-function checkDataUsageNotification(settings, usage, callback) {
-  var proxy = document.getElementById('message-handler').contentWindow;
-  var f = proxy ? proxy.checkDataUsageNotification :
-                  window.checkDataUsageNotification;
-  return f(settings, usage, callback);
-}
-
 function addAlarmTimeout(type, delay) {
-  var proxy = document.getElementById('message-handler').contentWindow;
-  return proxy.addAlarmTimeout(type, delay);
+  var handlerContainer = document.getElementById('message-handler');
+  return handlerContainer.contentWindow.addAlarmTimeout(type, delay);
 }
 
 function setNextReset(when, callback) {
-  var proxy = document.getElementById('message-handler');
-  return proxy ? proxy.contentWindow.setNextReset(when, callback) :
-                 window.setNextReset(when, callback);
+  var handlerContainer = document.getElementById('message-handler');
+  return handlerContainer ?
+         handlerContainer.contentWindow.setNextReset(when, callback) :
+         window.setNextReset(when, callback);
 }
 
 function getTopUpTimeout(callback) {
-  var proxy = document.getElementById('message-handler');
-  return proxy ? proxy.contentWindow.getTopUpTimeout(callback) :
-                 window.getTopUpTimeout(callback);
+  var handlerContainer = document.getElementById('message-handler');
+  return handlerContainer ?
+         handlerContainer.contentWindow.getTopUpTimeout(callback) :
+         window.getTopUpTimeout(callback);
+}
+
+function addNetworkUsageAlarm(dataInterface, dataLimit, callback) {
+  var handlerContainer = document.getElementById('message-handler');
+  if (handlerContainer) {
+    handlerContainer.contentWindow
+      .addNetworkUsageAlarm(dataInterface, dataLimit, callback);
+  } else {
+    window.addNetworkUsageAlarm(dataInterface, dataLimit, callback);
+  }
 }
 
 // Next automatic reset date based on user preferences
@@ -68,7 +73,7 @@ function updateNextReset(trackingPeriod, value, callback) {
 function resetData(mode, onsuccess, onerror) {
 
   // Get all availabe Interfaces
-  var currentSimcardInterface = Common.getCurrentSIMInterface();
+  var currentSimcardInterface = Common.getDataSIMInterface();
   var wifiInterface = Common.getWifiInterface();
 
   // Ask reset for all available Interfaces
@@ -94,10 +99,24 @@ function resetData(mode, onsuccess, onerror) {
     mobileClearRequest = navigator.mozNetworkStats
                                           .clearStats(currentSimcardInterface);
     mobileClearRequest.onerror = getOnErrorFor('simcard');
+    mobileClearRequest.onsuccess = function _restoreDataLimitAlarm() {
+      ConfigManager.requestSettings(function _onSettings(settings) {
+        if (settings.dataLimit) {
+          // Restore network alarm
+          addNetworkUsageAlarm(currentSimcardInterface, getDataLimit(settings),
+            function _addNetworkUsageAlarmOK() {
+              ConfigManager.setOption({ 'dataUsageNotified': false });
+            });
+        }
+      });
+    };
   }
 
-  if (mode === 'all') {
     // Set last Reset
+  if (mode === 'all') {
+    ConfigManager.setOption({ lastCompleteDataReset: new Date() });
+  } else {
+    // Else clausure prevents running the update event twice
     ConfigManager.setOption({ lastDataReset: new Date() });
   }
 
@@ -194,7 +213,13 @@ var Common = {
 
   allNetworkInterfaces: {},
 
+  dataSimIccId: null,
+
   allNetworkInterfaceLoaded: false,
+
+  dataSimIccIdLoaded: false,
+
+  dataSimIcc: null,
 
   isValidICCID: function(iccid) {
     return typeof iccid === 'string' && iccid.length;
@@ -235,31 +260,28 @@ var Common = {
     window.addEventListener('messagehandlerready', checkReady);
   },
 
-  // Checks for a SIM change
-  checkSIMChange: function(callback, onerror) {
-    asyncStorage.getItem('lastSIM', function _compareWithCurrent(lastSIM) {
-      var currentSIM = IccHelper.iccInfo.iccid;
-      if (currentSIM === null) {
-        console.error('Impossible: or we don\'t have SIM (so this method ' +
-                      'should not be called) or the RIL is returning null ' +
-                      'from time to time when checking ICCID.');
+  checkSIM: function(callback, onerror) {
+    var currentSIM = Common.dataSimIccId;
+    if (currentSIM === null) {
+      console.error('Impossible: or we don\'t have SIM (so this method ' +
+                    'should not be called) or the RIL is returning null ' +
+                    'from time to time when checking ICCID.');
 
-        if (typeof onerror === 'function') {
-          onerror();
-        }
+      if (typeof onerror === 'function') {
+        onerror();
+      }
+      return;
+    }
+
+    ConfigManager.requestSettings(function _onSettings(settings) {
+      if (settings.nextReset) {
+        setNextReset(settings.nextReset, callback);
         return;
       }
 
-      ConfigManager.requestSettings(function _onSettings(settings) {
-        if (settings.nextReset) {
-          setNextReset(settings.nextReset, callback);
-          return;
-        }
-
-        if (callback) {
-          callback();
-        }
-      });
+      if (callback) {
+        callback();
+      }
     });
   },
 
@@ -279,6 +301,12 @@ var Common = {
     });
 
     iframe.src = '/fte.html' + '#' + mode;
+  },
+
+  closeFTE: function() {
+    var iframe = document.getElementById('fte_view');
+    iframe.classList.add('non-ready');
+    iframe.src = '';
   },
 
   startApp: function() {
@@ -303,6 +331,19 @@ var Common = {
     return navigator.mozL10n.localize;
   },
 
+  getIccInfo: function _getIccInfo(iccId) {
+    if (!iccId) {
+      return undefined;
+    }
+    var iccManager = window.navigator.mozIccManager;
+    var iccInfo = iccManager.getIccById(iccId);
+    if (!iccInfo) {
+      console.error('Unrecognized iccID: ' + iccId);
+      return undefined;
+    }
+    return iccInfo;
+  },
+
   // Returns whether exists an nsIDOMNetworkStatsInterfaces object
   // that meet the argument function criteria
   getInterface: function getInterface(findFunction) {
@@ -319,9 +360,13 @@ var Common = {
     }
   },
 
-  getCurrentSIMInterface: function _getCurrentSIMInterface() {
-    var iccId = IccHelper.iccInfo ? IccHelper.iccInfo.iccid : null;
+  getDataSIMInterface: function _getDataSIMInterface() {
+    if (!this.dataSimIccIdLoaded) {
+      console.warn('Data simcard is not ready yet');
+      return;
+    }
 
+    var iccId = this.dataSimIccId;
     if (iccId) {
       var findCurrentInterface = function(networkInterface) {
         if (networkInterface.id === iccId) {
@@ -357,6 +402,56 @@ var Common = {
       console.error('Error when trying to load network interfaces');
       if (onerror) {
         onerror();
+      }
+    };
+  },
+
+  loadDataSIMIccId: function _loadDataSIMIccId(onsuccess, onerror) {
+    var settings = navigator.mozSettings,
+        mobileConnections = navigator.mozMobileConnections,
+        dataSlotId = 0;
+    var req = settings &&
+              settings.createLock().get('ril.data.defaultServiceId');
+
+    req.onsuccess = function _onsuccesSlotId() {
+      dataSlotId = req.result['ril.data.defaultServiceId'] || 0;
+      var mobileConnection = mobileConnections[dataSlotId];
+      var iccId = mobileConnection.iccId || null;
+      if (!iccId) {
+        console.error('The slot ' + dataSlotId +
+                   ', configured as the data slot, is empty');
+        (typeof onerror === 'function') && onerror();
+        return;
+      }
+      Common.dataSimIccId = iccId;
+      Common.dataSimIccIdLoaded = true;
+      Common.dataSimIcc = Common.getIccInfo(iccId);
+      if (onsuccess) {
+        onsuccess(iccId);
+      }
+    };
+
+    req.onerror = function _onerrorSlotId() {
+      console.warn('ril.data.defaultServiceId does not exists');
+      var iccId = null;
+
+      // Load the fist slot with iccId
+      for (var i = 0; i < mobileConnections.length && !iccId; i++) {
+        if (mobileConnections[i]) {
+          iccId = mobileConnections[i].iccId;
+        }
+      }
+      if (!iccId) {
+        console.error('No SIM in the device');
+        (typeof onerror === 'function') && onerror();
+        return;
+      }
+
+      Common.dataSimIccId = iccId;
+      Common.dataSimIccIdLoaded = true;
+      Common.dataSimIcc = Common.getIccInfo(iccId);
+      if (onsuccess) {
+        onsuccess(iccId);
       }
     };
   }

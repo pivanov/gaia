@@ -1,55 +1,72 @@
-var Calendar = require('./calendar'),
-    assert = require('assert');
+'use strict';
 
+var Calendar = require('./lib/calendar'),
+    assert = require('chai').assert,
+    format = require('util').format;
 
-// test is disabled see: Bug 919066
 marionette('creating an event', function() {
+  var app;
   var client = marionette.client();
 
-  var app, expected;
+  var title = 'Puppy Bowl dogefortlongtextfotestloremipsumdolorsitamet',
+      description = 'lorem ipsum dolor sit amet maecennas ullamcor',
+      location = 'Animal Planet ' +
+                 'reallylongwordthatshouldnotoverflowbecausewewrap',
+      date = new Date(),
+      startHour = 2,
+      duration = 1;
+
   setup(function() {
     app = new Calendar(client);
-    app.launch();
-
-    // Get the day's events at the bottom of the month view.
-    var events = app.monthViewDayEvents;
-
-    // There shouldn't be any events yet.
-    assert.strictEqual(events.length, 0);
-
-    // Create an event!
-    expected = app.createEvent();
-
-    // Wait until we return to the base, month view.
-    client.waitFor(function() {
-      return app.isMonthViewActive();
-    });
-  });
-
-  test.skip('should make an event visible in the month day view', function() {
-    // Get the day's events at the bottom of the month view.
-    var els = app.monthViewDayEvents;
-
-    // There should now be a single event.
-    assert.strictEqual(els.length, 1);
-  });
-
-  test.skip('should display the created event in read-only view', function() {
-    // Get the day's events at the bottom of the month view.
-    var els = app.monthViewDayEvents;
-
-    // Click on the event.
-    var el = els[0];
-    el.click();
-
-    // Wait until we see the read-only event view.
-    var active = app.isViewEventViewActive.bind(app, client);
-    client.waitFor(function() {
-      // Verify event's details to make sure they were set correctly.
-      return app.isViewEventViewActive();
+    app.launch({ hideSwipeHint: true });
+    app.createEvent({
+      title: title,
+      description: description,
+      location: location,
+      startHour: startHour,
+      duration: duration
     });
 
-    var actual = app.getViewEventEvent();
-    assert.deepEqual(actual, expected);
+    app.month.waitForDisplay();
+  });
+
+  test('should display the created event in months day', function() {
+    var monthDay = app.monthDay;
+    var event = monthDay.events[0];
+    assert.equal(monthDay.getTitle(event), title);
+    assert.equal(monthDay.getLocation(event), location);
+    // assert.equal(monthDay.getStartHour(event), '2AM');
+  });
+
+  suite('opening event in read view', function() {
+    setup(function() {
+      var event = app.monthDay.events[0];
+
+      // Scroll so that the first one is in view and click it.
+      app.monthDay.scrollToEvent(event);
+      event.click();
+
+      // Wait until the read view is displayed.
+      app.readEvent.waitForDisplay();
+    });
+
+    test('should display the created event in read view', function() {
+      var readEvent = app.readEvent;
+      assert.equal(readEvent.title, title);
+      assert.equal(readEvent.description, description);
+      assert.equal(readEvent.location, location);
+      assert.equal(readEvent.calendar, 'Offline calendar');
+      assert.equal(readEvent.startDate, app.formatDate(date));
+      assert.equal(readEvent.startTime, format('%d:00 AM', startHour));
+      assert.equal(readEvent.endDate, app.formatDate(date));
+      assert.equal(readEvent.endTime, format('%d:00 AM', startHour + duration));
+    });
+
+    test('should not overflow title, location, or description', function() {
+      var readEvent = app.readEvent;
+      app.checkOverflow(readEvent.titleContainer, 'title');
+      app.checkOverflow(readEvent.descriptionContainer, 'description');
+      app.checkOverflow(readEvent.locationContainer, 'location');
+    });
   });
 });

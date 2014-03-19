@@ -35,10 +35,16 @@ var steps = {
   },
   7: {
     onlyForward: false,
+    hash: '#firefox_accounts',
+    requireSIM: false,
+    requireFxAEnabled: true
+  },
+  8: {
+    onlyForward: false,
     hash: '#welcome_browser',
     requireSIM: false
   },
-  8: {
+  9: {
     onlyForward: false,
     hash: '#browser_privacy',
     requireSIM: false
@@ -53,7 +59,8 @@ var _;
 var Navigation = {
   currentStep: 1,
   previousStep: 1,
-
+  simMandatory: false,
+  fxaEnabled: false,
   init: function n_init() {
     _ = navigator.mozL10n.get;
     var settings = navigator.mozSettings;
@@ -64,12 +71,21 @@ var Navigation = {
     window.addEventListener('hashchange', this);
     UIManager.activationScreen.addEventListener('click',
         this.handleExternalLinksClick.bind(this));
-    this.simMandatory = false;
 
-    var req = settings && settings.createLock().get('ftu.sim.mandatory') || {};
+    var reqSIM =
+      settings && settings.createLock().get('ftu.sim.mandatory') || {};
     var self = this;
-    req.onsuccess = function onSuccess() {
-      self.simMandatory = req.result['ftu.sim.mandatory'] || false;
+    reqSIM.onsuccess = function onSuccess() {
+      self.simMandatory = reqSIM.result['ftu.sim.mandatory'] || false;
+    };
+
+    var reqFxA =
+      settings &&
+      settings.createLock().get('identity.fxaccounts.ui.enabled') || {};
+    var self = this;
+    reqFxA.onsuccess = function onSuccess() {
+      self.fxaEnabled =
+        reqFxA.result['identity.fxaccounts.ui.enabled'] || false;
     };
   },
 
@@ -135,21 +151,15 @@ var Navigation = {
     window.open(href);
   },
 
-  getProgressBarClassName: function n_getProgressBarClassName() {
+  getProgressBarState: function n_getProgressBarState() {
     // Manage step state (dynamically change)
-    var className = 'step-state step-';
-    if (this.skipped && this.currentStep > 2) {
-      className += (this.currentStep - 1) + ' less-steps';
-    } else {
-      className += this.currentStep;
-    }
-
-    return className;
+    return (this.skipped && this.currentStep > 2) ? this.currentStep - 2 :
+      this.currentStep - 1;
   },
 
   handleEvent: function n_handleEvent(event) {
     var actualHash = window.location.hash;
-    var className = this.getProgressBarClassName();
+    UIManager.progressBar.classList.remove('hidden');
     switch (actualHash) {
       case '#languages':
         UIManager.mainTitle.innerHTML = _('language');
@@ -194,6 +204,9 @@ var Navigation = {
         fbState = window.navigator.onLine ? 'enabled' : 'disabled';
         ImportIntegration.checkImport(fbState);
         break;
+      case '#firefox_accounts':
+        UIManager.mainTitle.innerHTML = _('firefox-accounts');
+        break;
       case '#welcome_browser':
         UIManager.mainTitle.innerHTML = _('aboutBrowser');
         break;
@@ -207,13 +220,15 @@ var Navigation = {
       case '#about-your-privacy':
       case '#sharing-performance-data':
         UIManager.mainTitle.innerHTML = _('aboutBrowser');
-        // override the className here
-        className = 'hidden';
+        UIManager.progressBar.classList.add('hidden');
         UIManager.navBar.classList.add('back-only');
         break;
     }
 
-    UIManager.progressBar.className = className;
+    UIManager.progressBarState.style.width =
+      'calc(100% / ' + numSteps + ')';
+    UIManager.progressBarState.style.transform =
+      'translateX(' + (this.getProgressBarState() * 100) + '%)';
 
     // If SIM card is mandatory, we hide the button skip
     if (this.simMandatory) {
@@ -259,13 +274,21 @@ var Navigation = {
 
     // Retrieve future location
     var futureLocation = steps[self.currentStep];
+
+    // Check required setting.
+    if (futureLocation.requireFxAEnabled &&
+        !this.fxaEnabled) {
+      self.skipStep();
+      return;
+    }
+
     // There is some locations which need a 'loading'
     if (futureLocation.hash === '#wifi') {
       utils.overlay.show(_('scanningNetworks'), 'spinner');
     }
 
     // If SIMcard is mandatory and no SIM, go to message window
-    if (self.simMandatory &&
+    if (this.simMandatory &&
         !IccHelper.cardState &&
         futureLocation.requireSIM) {
       //Send to SIM Mandatory message
@@ -299,12 +322,19 @@ var Navigation = {
 
     // SIM card management
     if (futureLocation.requireSIM) {
-      SimManager.handleCardState(function check_cardState(response) {
+      var check_cardState = function(response) {
         self.skipped = false;
-        if (!response) {
+        if (!response || (!SimManager.available() &&
+          // Don't skip it if next step is data 3g
+         futureLocation.hash !== '#data_3g')) {
           self.skipStep();
         }
-      });
+      };
+
+      // if we are navigating backwards, we do not want to
+      // show the SIM unlock screens for the data_3g step
+      var skipUnlockScreens = this.currentStep < this.previousStep;
+      SimManager.handleCardState(check_cardState, skipUnlockScreens);
     }
   }
 };

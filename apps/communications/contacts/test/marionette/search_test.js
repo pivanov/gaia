@@ -1,3 +1,5 @@
+'use strict';
+
 var Contacts = require('./lib/contacts');
 var assert = require('assert');
 
@@ -14,7 +16,7 @@ marionette('Contacts > Search', function() {
   });
 
   suite('Search Mode', function() {
-    test('Can enter and exit search mode', function() {
+    test.skip('Can enter and exit search mode', function() {
 
       subject.addContact();
 

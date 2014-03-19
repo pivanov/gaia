@@ -1,3 +1,6 @@
+/* globals LazyLoader, ConfirmDialog, utils, contacts, oauthflow,
+  Curtain, ImageLoader, importer, asyncStorage, FriendListRenderer,
+  Rest, oauth2, contactsList*/
 'use strict';
 
 if (typeof window.importer === 'undefined') {
@@ -78,6 +81,14 @@ if (typeof window.importer === 'undefined') {
 
     window.addEventListener('online', onLineChanged);
     window.addEventListener('offline', onLineChanged);
+
+    function notifyParent(message, origin) {
+      parent.postMessage({
+        type: message.type || '',
+        data: message.data || '',
+        message: message.message || ''
+      }, origin);
+    }
 
     function showOfflineDialog(yesCb, noCb) {
       var recommend = serviceConnector.name === 'facebook';
@@ -207,12 +218,9 @@ if (typeof window.importer === 'undefined') {
     }
 
     UI.end = function(event) {
-      var msg = {
-        type: 'window_close',
-        data: ''
-      };
-
-      parent.postMessage(msg, targetApp);
+      notifyParent({
+        type: 'window_close'
+      }, targetApp);
       // uncomment this to make it work on B2G-Desktop
       // parent.postMessage(msg, '*');
 
@@ -247,7 +255,7 @@ if (typeof window.importer === 'undefined') {
             markPendingLogout(logoutUrl, serviceName, cb);
           },
           timeout: function() {
-            window.console.warn('Timeout while logging out user ', url);
+            window.console.warn('Timeout while logging out user ', logoutUrl);
             removeToken();
             markPendingLogout(logoutUrl, serviceName, cb);
           },
@@ -406,11 +414,8 @@ if (typeof window.importer === 'undefined') {
      *
      */
     function friendsAvailable() {
-      FixedHeader.init('#mainContent', '#fixed-container',
-                     '.import-list header, .fb-import-list header');
-
       imgLoader = new ImageLoader('#mainContent',
-                                ".block-item:not([data-uuid='#uid#'])");
+                                '.block-item:not([data-uuid="#uid#"])');
 
       var s = '.block-item:not([data-uuid="#uid#"]) input[type="checkbox"]';
       checkNodeList = contactList.querySelectorAll(s);
@@ -518,17 +523,6 @@ if (typeof window.importer === 'undefined') {
 
     };
 
-    function friendImportTimeout() {
-      if (currentRequest) {
-        window.setTimeout(currentRequest.ontimeout, 0);
-      }
-    }
-
-    function friendImportError(e) {
-      currentRequest.failed(e);
-    }
-
-
     /**
      *  Callback invoked when friends are ready to be used
      *
@@ -574,17 +568,15 @@ if (typeof window.importer === 'undefined') {
         else {
           // There was a problem with the access token
           window.console.warn('Access Token expired or revoked');
-          Curtain.hide();
+          Curtain.hide(notifyParent.bind(null, {
+            type: 'token_error'
+          }, targetApp));
           window.asyncStorage.removeItem(tokenKey,
             function token_removed() {
               oauth2.getAccessToken(function(new_acc_tk) {
                 access_token = new_acc_tk;
                 Importer.getFriends(new_acc_tk);
               }, 'friends', serviceConnector.name);
-              parent.postMessage({
-                type: 'token_error',
-                data: ''
-              },targetApp);
           });
         } // else
       } // else
@@ -609,24 +601,17 @@ if (typeof window.importer === 'undefined') {
          currentNetworkRequest.cancel();
          currentNetworkRequest = null;
       }
-
-      Curtain.hide();
-
-      parent.postMessage({
-            type: 'abort',
-            data: ''
-      }, targetApp);
+      Curtain.hide(notifyParent.bind(null, {
+        type: 'abort'
+      }, targetApp));
     }
 
     function setCurtainHandlersErrorFriends() {
       Curtain.oncancel = function friends_cancel() {
-          Curtain.hide();
-
-          parent.postMessage({
-            type: 'abort',
-            data: ''
-          }, targetApp);
-        };
+        Curtain.hide(notifyParent.bind(null, {
+          type: 'abort'
+        }, targetApp));
+      };
 
       Curtain.onretry = function get_friends() {
         Curtain.oncancel = cancelCb;
@@ -697,39 +682,33 @@ if (typeof window.importer === 'undefined') {
      *  finished
      */
     function onUpdate(numFriends) {
-      function notifyParent(numFriends) {
-        parent.postMessage({
-          type: 'window_close',
-          data: '',
-          message: cancelled ? '' : _('friendsUpdated', {
-            numFriends: numFriends
-          })
-        }, targetApp);
-      }
-
       // If the service requires to do the logout it is done
       serviceLogout(notifyLogout);
 
       if (Importer.getContext() === 'ftu') {
-        Curtain.hide(function onhide() {
-          notifyParent(numFriends);
-        });
+        Curtain.hide(notifyParent.bind(null, {
+          type: 'window_close',
+          message: cancelled ? null : _('friendsUpdated', {
+            numFriends: numFriends
+          })
+        }, targetApp));
       } else {
-        parent.postMessage({
-          type: 'import_updated',
-          data: ''
+        notifyParent({
+          type: 'import_updated'
         }, targetApp);
-
         window.addEventListener('message', function finished(e) {
           if (e.origin !== targetApp) {
             return;
           }
           if (e.data.type === 'contacts_loaded') {
             // When the list of contacts is loaded and it's the current view
-            Curtain.hide(function onhide() {
-              // Please close me and display the number of friends updated
-              notifyParent(numFriends);
-            });
+            Curtain.hide(notifyParent.bind(null, {
+              type: 'window_close',
+              message: cancelled ? null :
+              _('friendsUpdated', {
+                numFriends: numFriends
+              })
+            }, targetApp));
             window.removeEventListener('message', finished);
           }
         });
@@ -743,7 +722,6 @@ if (typeof window.importer === 'undefined') {
 
       var contacts = [];
       var unSelectedKeys = Object.keys(unSelectedContacts);
-      // ContactsCleaner expects an Array object
       unSelectedKeys.forEach(function iterator(uid) {
         var deviceContacts = unSelectedContacts[uid];
         for (var i = 0; i < deviceContacts.length; i++) {
@@ -792,13 +770,15 @@ if (typeof window.importer === 'undefined') {
      *
      */
     UI.importAll = function(e) {
+      imgLoader.unload(); // Removing listeners
       var selected = Object.keys(selectedContacts).length;
       var unSelected = getTotalUnselected();
       var total = selected + unSelected;
 
       cancelled = false;
+      var progress;
       if (selected > 0) {
-        var progress = Curtain.show('progress', 'import');
+        progress = Curtain.show('progress', 'import');
         progress.setTotal(total);
 
         Curtain.oncancel = cancelImport;
@@ -822,7 +802,7 @@ if (typeof window.importer === 'undefined') {
           }
         }, progress);
       } else if (unSelected > 0) {
-        var progress = Curtain.show('progress', 'update');
+        progress = Curtain.show('progress', 'update');
         progress.setTotal(total);
         Curtain.oncancel = cancelImport;
         cleanContacts(function callback() {
@@ -878,17 +858,6 @@ if (typeof window.importer === 'undefined') {
 
       return false;
     };
-
-    /**
-     *   Clears the list of contacts
-     *
-     */
-    function clearList() {
-      var template = contactList.querySelector('[data-template]');
-
-      utils.dom.removeChildNodes(contactList);
-      contactList.appendChild(template);
-    }
 
     /**
      *  Makes a bulk selection of the contacts
@@ -985,8 +954,6 @@ if (typeof window.importer === 'undefined') {
       }
 
       checkNodeList = null;
-      var toBeImported = Object.keys(selectedContacts);
-      var numFriends = toBeImported.length;
 
       theImporter = serviceConnector.getImporter(selectedContacts,
                                                    access_token);
@@ -1035,8 +1002,7 @@ if (typeof window.importer === 'undefined') {
         showOfflineDialog(function() {
           doImportAll(importedCB, progress);
         }, function() {
-          Curtain.hide();
-          UI.end();
+          Curtain.hide(UI.end);
         });
       }
     };

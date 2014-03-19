@@ -40,6 +40,9 @@ if (!fb.link) {
       ' ORDER BY name'
     ];
 
+    var COUNT_QUERY = 'SELECT uid FROM user WHERE uid IN ' +
+                      '(SELECT uid1 FROM friend WHERE uid2=me())';
+
     var SEARCH_ACCENTS_FIELDS = {
       'last_name': 'familyName',
       'first_name': 'givenName',
@@ -60,6 +63,13 @@ if (!fb.link) {
 
     // Only needed for testing purposes
     var completedCb;
+
+    function notifyParent(message) {
+      parent.postMessage({
+        type: message.type || '',
+        data: message.data || ''
+      }, fb.CONTACTS_APP_ORIGIN);
+    }
 
     // Builds the first query for finding a contact to be linked to
     function buildQuery(contact) {
@@ -129,11 +139,50 @@ if (!fb.link) {
 
     function getRemoteProposalAll(acc_tk) {
       numQueries++;
-      doGetRemoteProposal(acc_tk, null, ALL_QUERY.join(''));
+      doGetRemoteProposal(acc_tk, null, ALL_QUERY.join(''), true);
+    }
+
+    // This function deals with the response for a proposal
+    // It takes care whether a response with the number of friends is present
+    // and updates the cache accordingly
+    function proposalReadyMultiple(done, error, response) {
+      // If there is an error we just pass it upstream
+      if (response.error) {
+        done(response);
+        return;
+      } else if (!Array.isArray(response.data)) {
+        error({
+          name: 'QueryResponseError'
+        });
+        return;
+      }
+
+      var friendList, totalFriends;
+      if (response.data.length > 0 &&
+          Array.isArray(response.data[0].fql_result_set)) {
+        friendList = response.data[0].fql_result_set;
+        if (response.data[1] &&
+            Array.isArray(response.data[1].fql_result_set)) {
+          totalFriends = response.data[1].fql_result_set.length;
+        }
+      }
+      else {
+        friendList = response.data;
+        totalFriends = friendList.length;
+      }
+
+      if (typeof totalFriends !== 'undefined') {
+        fb.utils.setCachedNumFriends(totalFriends);
+      }
+
+      done({
+        data: friendList
+      });
     }
 
     // Performs all the work to obtain the remote proposal
-    function doGetRemoteProposal(acc_tk, contactData, query) {
+    // the "isAll" parameter indicates that the query will get all friends
+    function doGetRemoteProposal(acc_tk, contactData, query, isAll) {
       /*
         Phone.lookup was analysed but we were not happy about how it worked
 
@@ -144,29 +193,35 @@ if (!fb.link) {
       var sentries = JSON.stringify(entries);
 
       */
+      var theQuery = query;
+      var callback = proposalReadyMultiple.bind(null, fb.link.proposalReady,
+                                              fb.link.errorHandler);
+      // If the query is not going to provide a full list of friends
+      // We count all in order to refresh the total number of friends
+      if (!isAll) {
+        theQuery = JSON.stringify({
+          query1: query,
+          query2: COUNT_QUERY
+        });
+      }
+
       state = 'proposal';
-      currentNetworkRequest = fb.utils.runQuery(query, {
-        success: fb.link.proposalReady,
+      currentNetworkRequest = fb.utils.runQuery(theQuery, {
+        success: callback,
         error: fb.link.errorHandler,
         timeout: fb.link.timeoutHandler
       }, acc_tk);
     }
 
     // Invoked when remoteAll is canceled
-    function cancelCb(notifyParent) {
+    function cancelCb(shouldNotifyParent) {
       if (currentNetworkRequest) {
         currentNetworkRequest.cancel();
         currentNetworkRequest = null;
       }
 
-      Curtain.hide();
-
-      if (notifyParent) {
-        parent.postMessage({
-            type: 'abort',
-            data: ''
-        }, fb.CONTACTS_APP_ORIGIN);
-      }
+      Curtain.hide(shouldNotifyParent ? notifyParent.bind(
+        null, {type: 'abort'}) : null);
     }
 
     // Invoked when timeout or error and the user cancels all
@@ -508,14 +563,12 @@ if (!fb.link) {
     }
 
     function handleTokenError() {
-      Curtain.hide();
+      Curtain.hide(notifyParent.bind(null, {
+        type: 'token_error'
+      }));
       var cb = function() {
         allFriends = null;
         link.start(contactid);
-        parent.postMessage({
-          type: 'token_error',
-          data: ''
-        }, fb.CONTACTS_APP_ORIGIN);
       };
       window.asyncStorage.removeItem(fb.utils.TOKEN_DATA_KEY, cb);
     }
@@ -531,11 +584,12 @@ if (!fb.link) {
       req.onsuccess = function() {
         if (req.result) {
           window.setTimeout(function delay() {
-            Curtain.hide(function hide() {
-              notifyParent({
+            Curtain.hide(notifyParent.bind(null, {
+              type: 'item_selected',
+              data: {
                 uid: friendUidToLink
-              });
-            });
+              }
+            }));
           }, 1000);
         }
         else {
@@ -543,9 +597,10 @@ if (!fb.link) {
           var callbacks = { };
 
           callbacks.success = function(data) {
-            Curtain.hide(function() {
-              notifyParent(data);
-            });
+            Curtain.hide(notifyParent.bind(null, {
+              type: 'item_selected',
+              data: data
+            }));
           };
 
           callbacks.error = function(e) {
@@ -566,6 +621,7 @@ if (!fb.link) {
             link.baseHandler('timeout');
           };
 
+          imgLoader.unload(); // Removing listeners
           FacebookConnector.importContact(friendUidToLink, access_token,
                                           callbacks, 'not_match');
         }
@@ -588,18 +644,6 @@ if (!fb.link) {
 
       parent.postMessage(msg, fb.CONTACTS_APP_ORIGIN);
     };
-
-    function notifyParent(data) {
-      var msg = {
-        type: 'item_selected',
-        data: data
-      };
-
-      parent.postMessage(msg, fb.CONTACTS_APP_ORIGIN);
-
-      // Uncomment this to make this work in B2G-Desktop
-      // parent.postMessage(msg, '*');
-    }
 
     UI.viewAllFriends = function(event) {
       if (!allFriends) {

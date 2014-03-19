@@ -34,3 +34,8 @@
   margin-top: 0.8rem;
   padding-top: 0.8rem;
 }
+
+#event-view .content {
+  word-wrap: break-word;
+  -moz-hyphens: auto;
+}

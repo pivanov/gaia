@@ -1,8 +1,10 @@
+/* globals LazyLoader, LiveConnector, GmailConnector, FacebookConnector,
+  utils, importer, contacts*/
 'use strict';
 
 (function(document) {
   var serviceName = getServiceName();
-  var allowedOrigin = oauthflow.params[serviceName].appOrigin;
+  var allowedOrigin = location.origin;
 
   function parseParams(paramsStr) {
     var out = {};
@@ -63,15 +65,6 @@
     else {
       throw new Error('Service Connector not found !!!');
     }
-  }
-
-  function cancelCb() {
-    Curtain.hide();
-
-    parent.postMessage({
-      type: 'abort',
-      data: ''
-    }, allowedOrigin);
   }
 
   function tokenReady(access_token) {

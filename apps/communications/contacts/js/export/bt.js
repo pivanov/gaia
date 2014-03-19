@@ -1,10 +1,12 @@
+/* global getStorageIfAvailable, getUnusedFilename, ContactToVcardBlob,
+    MozActivity */
+
+/* exported ContactsBTExport */
 'use strict';
 
 var ContactsBTExport = function ContactsBTExport() {
   var contacts;
   var progressStep;
-  var exported = [];
-  var notExported = [];
   var _ = navigator.mozL10n.get;
 
   var _setContactsToExport = function btex_setContactsToExport(cts) {
@@ -23,19 +25,27 @@ var ContactsBTExport = function ContactsBTExport() {
     progressStep = p;
   };
 
-  var _hasName = function _hasName(contact) {
+  var _getGivenName = function _getGivenName(contact) {
     return (Array.isArray(contact.givenName) && contact.givenName[0] &&
-              contact.givenName[0].trim()) ||
-            (Array.isArray(contact.familyName) && contact.familyName[0] &&
+              contact.givenName[0].trim());
+  };
+  var _getLastName = function _getLastName(contact) {
+    return (Array.isArray(contact.familyName) && contact.familyName[0] &&
               contact.familyName[0].trim());
   };
   var _getFileName = function _getFileName() {
     var filename = [];
     if (contacts && contacts.length === 1) {
-      var contact = contacts[0];
-      if (_hasName(contact)) {
-        filename.push(contact.givenName[0], contact.familyName[0]);
-      } else {
+      var contact = contacts[0],
+          givenName = _getGivenName(contact),
+          lastName = _getLastName(contact);
+      if (givenName) {
+        filename.push(givenName);
+      }
+      if (lastName) {
+        filename.push(lastName);
+      }
+      if (filename.length === 0) {
         if (contact.org && contact.org.length > 0) {
           filename.push(contact.org[0]);
         } else if (contact.tel && contact.tel.length > 0) {
@@ -119,18 +129,21 @@ var ContactsBTExport = function ContactsBTExport() {
     ContactToVcardBlob(contacts, function onContacts(blob) {
       _getStorage(_getFileName(), blob,
       function onStorage(error, storage, filename) {
-        if (checkError(error))
+        if (checkError(error)) {
           return;
+        }
 
         _saveToSdcard(storage, filename, blob,
         function onVcardSaved(error, filepath) {
-          if (checkError(error))
+          if (checkError(error)) {
             return;
+          }
 
           _getFile(storage, filepath,
           function onFileRetrieved(error, file) {
-            if (checkError(error))
+            if (checkError(error)) {
               return;
+            }
 
             var a = new MozActivity({
               name: 'share',
@@ -162,7 +175,7 @@ var ContactsBTExport = function ContactsBTExport() {
 
   return {
     'setContactsToExport': _setContactsToExport,
-    'shouldShowProgress': function btex_shouldShowProgress() { return true },
+    'shouldShowProgress': function btex_shouldShowProgress() { return true; },
     'hasDeterminativeProgress': _hasDeterminativeProgress,
     'getExportTitle': _getExportTitle,
     'setProgressStep': _setProgressStep,

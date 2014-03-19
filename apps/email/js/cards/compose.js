@@ -44,6 +44,8 @@ function focusInputAndPositionCursorFromContainerClick(event, input) {
   // because under Gecko originalTarget may contain anonymous content.
   if (event.explicitOriginalTarget === input)
     return;
+  // Stop bubbling to avoid our other focus-handlers!
+  event.stopPropagation();
 
   // coordinates are relative to the viewport origin
   var bounds = input.getBoundingClientRect();
@@ -67,6 +69,7 @@ function ComposeCard(domNode, mode, args) {
   this.composerData = args.composerData || {};
   this.activity = args.activity;
   this.sending = false;
+  this.wifiLock = null;
 
   domNode.getElementsByClassName('cmp-back-btn')[0]
     .addEventListener('click', this.onBack.bind(this), false);
@@ -81,10 +84,6 @@ function ComposeCard(domNode, mode, args) {
   this.bccNode = domNode.getElementsByClassName('cmp-bcc-text')[0];
   this.subjectNode = domNode.getElementsByClassName('cmp-subject-text')[0];
   this.textBodyNode = domNode.getElementsByClassName('cmp-body-text')[0];
-  this.textBodyNode.addEventListener('input',
-                                     this.onTextBodyDelta.bind(this));
-  this.textBodyNode.addEventListener('change',
-                                     this.onTextBodyDelta.bind(this));
   this.htmlBodyContainer = domNode.getElementsByClassName('cmp-body-html')[0];
   this.htmlIframeNode = null;
 
@@ -124,6 +123,27 @@ function ComposeCard(domNode, mode, args) {
       evt, subjectContainer.querySelector('input'));
   });
 
+  // Likewise, clicking on the empty space below our contenteditable region
+  // or on our immutable HTML quoting box should result in us positioning
+  // the cursor in our contenteditable region.
+  this.scrollContainer.addEventListener(
+    'click',
+    function(event) {
+      // Only do this if the click is BELOW the text area.
+      var bounds = this.textBodyNode.getBoundingClientRect();
+      if (event.clientY > bounds.bottom) {
+        this._focusEditorWithCursorAtEnd(event);
+      }
+    }.bind(this));
+  this.htmlBodyContainer.addEventListener(
+    'click', this._focusEditorWithCursorAtEnd.bind(this));
+
+  // Tracks if the card closed itself, in which case
+  // no draft saving is needed. If something else
+  // causes the card to die, then we want to save any
+  // state.
+  this._selfClosed = false;
+
   // Sent sound init
   this.sentAudioKey = 'mail.sent-sound.enabled';
   this.sentAudio = new Audio('/sounds/sent.ogg');
@@ -142,6 +162,85 @@ function ComposeCard(domNode, mode, args) {
   }
 }
 ComposeCard.prototype = {
+
+  /**
+   * Focus our contenteditable region and position the cursor at the last
+   * valid editing cursor position.
+   *
+   * The intent is so that if the user taps below our editing region that we
+   * still correctly position the cursor.  We previously relied on min-height
+   * to do this for us, but that results in ugly problems when we have quoted
+   * HTML that follows and our editable region is not big enough to satisfy
+   * the height.
+   *
+   * Note: When we are quoting HTML, the "Bob wrote:" stuff does go in the
+   * contenteditable text area, so we may actually want to get smarter and
+   * position the cursor before that node instead.
+   */
+  _focusEditorWithCursorAtEnd: function(event) {
+    if (event)
+      event.stopPropagation();
+
+    // Selection/range manipulation is the easiest way to force the cursor
+    // to a specific location.
+    //
+    // Note: Once the user has pressed return once, the editor will create a
+    // bogus <br type="_moz"> that is always the last element.  Even though this
+    // bogus node will be the last child, nothing tremendously bad happens.
+    //
+    // Note: This technique does result in our new text existing in its own,
+    // new text node.  So don't make any assumptions about how text nodes are
+    // arranged.
+    var insertAfter = this.textBodyNode.lastChild;
+    var range = document.createRange();
+    range.setStartAfter(insertAfter);
+    range.setEndAfter(insertAfter);
+
+    this.textBodyNode.focus();
+    var selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  },
+
+  /**
+   * Inserts an email into the contenteditable element
+   */
+  populateEditor: function(value) {
+    var lines = value.split('\n');
+    var frag = document.createDocumentFragment();
+    for (var i = 0, len = lines.length; i < len; i++) {
+      if (i) {
+        frag.appendChild(document.createElement('br'));
+      }
+      frag.appendChild(document.createTextNode(lines[i]));
+    }
+    this.textBodyNode.appendChild(frag);
+  },
+
+  /**
+   * Gets the raw value from a contenteditable div
+   */
+  fromEditor: function(value) {
+    var content = '';
+    var len = this.textBodyNode.childNodes.length;
+    for (var i = 0; i < len; i++) {
+      var node = this.textBodyNode.childNodes[i];
+      if (node.nodeName === 'BR' &&
+          // Gecko's contenteditable implementation likes to create a synthetic
+          // trailing BR with type="_moz".  We do not like/need this synthetic
+          // BR, so we filter it out.  Check out
+          // nsTextEditRules::CreateTrailingBRIfNeeded to find out where it
+          // comes from.
+          node.getAttribute('type') !== '_moz') {
+        content += '\n';
+      } else {
+        content += node.textContent;
+      }
+    }
+
+    return content;
+  },
+
   postInsert: function() {
     // the HTML bit needs us linked into the DOM so the iframe can be
     // linked in, hence this happens in postInsert.
@@ -197,9 +296,7 @@ ComposeCard.prototype = {
     this.insertAttachments();
 
     this.subjectNode.value = this.composer.subject;
-    this.textBodyNode.value = this.composer.body.text;
-    // force the textarea to be sized.
-    this.onTextBodyDelta();
+    this.populateEditor(this.composer.body.text);
 
     if (this.composer.body.html) {
       // Although (still) sanitized, this is still HTML we did not create and so
@@ -234,7 +331,7 @@ ComposeCard.prototype = {
     this.composer.cc = frobAddressNode(this.ccNode);
     this.composer.bcc = frobAddressNode(this.bccNode);
     this.composer.subject = this.subjectNode.value;
-    this.composer.body.text = this.textBodyNode.value;
+    this.composer.body.text = this.fromEditor();
     // The HTML representation cannot currently change in our UI, so no
     // need to save it.  However, what we send to the back-end is what gets
     // sent, so if you want to implement editing UI and change this here,
@@ -242,6 +339,7 @@ ComposeCard.prototype = {
   },
 
   _closeCard: function() {
+    this._selfClosed = true;
     Cards.removeCardAndSuccessors(this.domNode, 'animate');
   },
 
@@ -261,12 +359,12 @@ ComposeCard.prototype = {
     // body, there are attachments, or we already created a draft for this
     // guy in which case we really want to provide the option to delete the
     // draft.
-    return (this.subjectNode.value || this.textBodyNode.value ||
+    return (this.subjectNode.value || this.textBodyNode.textContent ||
         !checkAddressEmpty() || this.composer.attachments.length ||
         this.composer.hasDraft);
   },
 
-  _saveDraft: function(reason) {
+  _saveDraft: function(reason, callback) {
     // If the send process is happening, suppress automatic saves.
     // (Manual saves should not happen when 'sending' is true, but breaking
     // auto-saves would be very bad form.)
@@ -275,7 +373,7 @@ ComposeCard.prototype = {
       return;
     }
     this._saveStateToComposer();
-    this.composer.saveDraft();
+    this.composer.saveDraft(callback);
   },
 
   createBubbleNode: function(name, address) {
@@ -301,7 +399,7 @@ ComposeCard.prototype = {
    */
   insertBubble: function(node, name, address) {
     var container = node.parentNode;
-    var bubble = this.createBubbleNode(name, address);
+    var bubble = this.createBubbleNode(name || address, address);
     container.insertBefore(bubble, node);
   },
   /**
@@ -442,23 +540,6 @@ ComposeCard.prototype = {
     focusInputAndPositionCursorFromContainerClick(evt, input);
   },
 
-  /**
-   * Make our textarea grow as new lines are added...
-   */
-  onTextBodyDelta: function() {
-    var value = this.textBodyNode.value, newlines = 0, idx = -1;
-    while (true) {
-      idx = value.indexOf('\n', idx + 1);
-      if (idx === -1)
-        break;
-      newlines++;
-    }
-    // the last line won't have a newline
-    var neededRows = newlines + 1;
-    if (this.textBodyNode.rows !== neededRows)
-      this.textBodyNode.rows = neededRows;
-  },
-
   insertAttachments: function() {
     var attachmentsContainer =
       this.domNode.getElementsByClassName('cmp-attachment-container')[0];
@@ -597,9 +678,13 @@ ComposeCard.prototype = {
 
     console.log('compose: back: save needed, prompting');
     var menu = cmpDraftMenuNode.cloneNode(true);
+    this._savePromptMenu = menu;
     document.body.appendChild(menu);
+
     var formSubmit = (function(evt) {
       document.body.removeChild(menu);
+      this._savePromptMenu = null;
+
       switch (evt.explicitOriginalTarget.id) {
         case 'cmp-draft-save':
           console.log('compose: explicit draft save on exit');
@@ -630,7 +715,21 @@ ComposeCard.prototype = {
     }
   },
 
+  releaseLocks: function() {
+    if (this.wifiLock) {
+      this.wifiLock.unlock();
+      this.wifiLock = null;
+    }
+  },
+
   onSend: function() {
+    /* Check if already lock is enabled,
+     * If so disable it and then re enable the lock
+     */
+    this.releaseLocks();
+    if (navigator.requestWakeLock) {
+      this.wifiLock = navigator.requestWakeLock('wifi');
+    }
     this._saveStateToComposer();
 
     // XXX well-formedness-check (ideally just handle by not letting you send
@@ -649,7 +748,17 @@ ComposeCard.prototype = {
     console.log('compose: initiating send');
     this.composer.finishCompositionSendMessage(
       function callback(error , badAddress, sentDate) {
+        // Card could have been destroyed in the meantime,
+        // via an app card reset (not a _selfClosed case),
+        // so do not bother with the rest of this work if
+        // that was the case.
+        if (!this.composer) {
+          return;
+        }
+
         console.log('compose: callback triggered, err:', error);
+        // releasing the wake lock on send response
+        this.releaseLocks();
         var activityHandler = function() {
           if (activity) {
             // Just mention the action completed, but do not give
@@ -703,7 +812,11 @@ ComposeCard.prototype = {
       activity.onsuccess = function success() {
         if (this.result.email) {
           var emt = contactBtn.parentElement.querySelector('.cmp-addr-text');
-          self.insertBubble(emt, this.result.name, this.result.email);
+          var name = this.result.name;
+          if (Array.isArray(name)) {
+              name = name[0];
+          }
+          self.insertBubble(emt, name, this.result.email);
           self.sendButton.setAttribute('aria-disabled', 'false');
         }
       };
@@ -725,21 +838,26 @@ ComposeCard.prototype = {
         }
       });
       activity.onsuccess = (function success() {
-        var name = activity.result.blob.name || activity.result.name;
-        console.log('compose: attach activity succes:', name);
+        // Load the util on demand, since one small codepath needs it, and
+        // it avoids needing to bundle util's dependencies in a built layer.
+        require(['attachment_name'], function(attachmentName) {
+          var blob = activity.result.blob,
+              name = activity.result.blob.name || activity.result.name,
+              count = this.composer.attachments.length + 1;
 
-        // It's possible that the name field is empty
-        // we should generate a default name for it, please see
-        // https://bugzilla.mozilla.org/show_bug.cgi?id=848855
-        if (name)
+          name = attachmentName.ensureName(blob, name, count);
+
+          console.log('compose: attach activity success:', name);
+
           name = name.substring(name.lastIndexOf('/') + 1);
 
-        this.composer.addAttachment({
-          name: name,
-          blob: activity.result.blob
-        });
+          this.composer.addAttachment({
+            name: name,
+            blob: activity.result.blob
+          });
 
-        this.insertAttachments();
+          this.insertAttachments();
+        }.bind(this));
       }).bind(this);
     } catch (e) {
       console.log('WebActivities unavailable? : ' + e);
@@ -749,6 +867,25 @@ ComposeCard.prototype = {
   die: function() {
     document.removeEventListener('visibilitychange',
                                  this._bound_onVisibilityChange);
+
+    // If confirming for prompt when destroyed, just remove
+    // and if save is needed, it will be autosaved below.
+    if (this._savePromptMenu) {
+      document.body.removeChild(this._savePromptMenu);
+      this._savePromptMenu = null;
+    }
+
+    // If something else besides the card causes this card
+    // to die, but we have a draft to save, do it now.
+    // However, wait for the draft save to complete before
+    // completely shutting down the composer.
+    if (!this._selfClosed && this._saveNeeded()) {
+      console.log('compose: autosaving draft because not self-closed');
+      this._saveDraft('automatic');
+    }
+
+    this.releaseLocks();
+
     if (this.composer) {
       this.composer.die();
       this.composer = null;
