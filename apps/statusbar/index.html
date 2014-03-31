@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Statusbar</title>
+  <meta name="description" content="">
+  <!--
+    - This <style> and <link> is only used for the example preview,
+    - it isn't needed for the real use case.
+    -->
+  <link rel="stylesheet" href="style/statusbar/statusbar.css">
+  <style type="text/css">
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-size: 10px;
+      background-color: #fff;
+      font-family: sans-serif;
+    }
+    body {
+      background: none;
+    }
+    section[role="region"] {
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+    #statusbar {
+      top: 4rem;
+    }
+  </style>
+</head>
+<body role="application">
+
+  <div id="statusbar" data-z-index-level="statusbar">
+    <div id="statusbar-icons">
+      <!-- Time -->
+      <div id="statusbar-time">5:50 <span>PM</span></div>
+
+      <!-- Status -->
+      <div id="statusbar-battery" class="sb-icon sb-icon-battery"
+        data-level="30"></div>
+      <div id="statusbar-wifi" class="sb-icon sb-icon-wifi"
+        data-level="4"></div>
+      <div id="statusbar-flight-mode" class="sb-icon sb-icon-flight-mode"></div>
+      <div id="statusbar-connections"></div>
+
+      <!-- Permissions -->
+      <div id="statusbar-tethering" class="sb-icon sb-icon-tethering"></div>
+      <div id="statusbar-alarm" class="sb-icon sb-icon-alarm"></div>
+
+      <!-- Carrier & date label -->
+      <div id="statusbar-label" class="sb-start-upper">Fake Orange</div>
+      <!-- CDMA emergency callback Notification -->
+      <div id="statusbar-emergency-cb-notification" class="sb-start sb-icon sb-emergency-cb-icon-notification" hidden></div>
+    </div>
+  </div>
+
+</body>
+</html>
