@@ -22,6 +22,7 @@ requireApp('system/test/unit/mock_media_recording.js');
 requireApp('system/test/unit/mock_places.js');
 requireApp('system/test/unit/mock_remote_debugger.js');
 requireApp('system/test/unit/mock_screen_manager.js');
+requireApp('system/test/unit/mock_sound_manager.js');
 requireApp('system/test/unit/mock_software_button_manager.js');
 requireApp('system/test/unit/mock_source_view.js');
 requireApp('system/test/unit/mock_storage.js');
@@ -33,6 +34,7 @@ requireApp('system/test/unit/mock_activity_window_factory.js');
 requireApp('system/test/unit/mock_visibility_manager.js');
 requireApp('system/test/unit/mock_layout_manager.js');
 requireApp('system/test/unit/mock_secure_window_manager.js');
+requireApp('system/test/unit/mock_lockscreen_window_manager.js');
 requireApp('system/test/unit/mock_secure_window_factory.js');
 requireApp('system/test/unit/mock_activity_window_factory.js');
 requireApp('system/test/unit/mock_app_window_factory.js');
@@ -46,6 +48,7 @@ mocha.globals([
   'cancelHomeClick',
   'secureWindowManager',
   'secureWindowFactory',
+  'lockScreenWindowManager',
   'systemDialogManager',
   'devtoolsView',
   'dialerRinger',
@@ -53,6 +56,7 @@ mocha.globals([
   'mediaRecording',
   'remoteDebugger',
   'sourceView',
+  'soundManager',
   'storage',
   'softwareButtonManager',
   'telephonySettings',
@@ -87,6 +91,7 @@ var mocksForBootstrap = new MocksHelper([
   'SettingsURL',
   'SoftwareButtonManager',
   'SourceView',
+  'SoundManager',
   'Storage',
   'TelephonySettings',
   'SystemDialogManager',
@@ -98,6 +103,7 @@ var mocksForBootstrap = new MocksHelper([
   'SecureWindowManager',
   'SecureWindowFactory',
   'ActivityWindowFactory',
+  'LockScreenWindowManager',
   'L10n'
 ]).init();
 
