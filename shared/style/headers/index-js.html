@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <title>Headers</title>
+  <meta name="description" content="Providing top-level navigation and inputs for the active view">
+  <!--
+    - This <style> and <link> is only used for the example preview,
+    - it isn't needed for the real use case.
+    -->
+  <link rel="stylesheet" href="../headers.css">
+  <style type="text/css">
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-size: 10px;
+      font-family: sans-serif;
+      background-color: #fff;
+    }
+    body {
+      background: none;
+    }
+    section[role="region"] {
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+    div {
+      margin-top: 3rem;
+      text-align: center;
+      font-size: 1.4rem;
+    }
+  </style>
+</head>
+<body role="application">
+  <div>Only navigation</div>
+  <section role="region">
+    <header>
+      <a href="#"><span class="icon icon-back">back</span></a>
+      <h1>Messages</h1>
+    </header>
+  </section>
+
+  <section role="region">
+    <header>
+      <a href="#"><span class="icon icon-back">back</span></a>
+      <h1>Long Messages</h1>
+    </header>
+  </section>
+
+  <section role="region">
+    <header>
+      <a href="#"><span class="icon icon-back">back</span></a>
+      <h1>Long Long Messages</h1>
+    </header>
+  </section>
+
+  <section role="region">
+    <header>
+      <a href="#"><span class="icon icon-back">back</span></a>
+      <h1>Long Long Long Messages</h1>
+    </header>
+  </section>
+
+  <div>Only Actions</div>
+
+  <section role="region">
+    <header>
+      <menu type="toolbar">
+        <a href="#"><span class="icon icon-edit">edit</span></a>
+        <a href="#"><span class="icon icon-add">add</span></a>
+      </menu>
+      <h1>Messages</h1>
+    </header>
+  </section>
+
+  <section role="region">
+    <header>
+      <menu type="toolbar">
+        <a href="#"><span class="icon icon-edit">edit</span></a>
+        <a href="#"><span class="icon icon-add">add</span></a>
+      </menu>
+      <h1>Long Messages</h1>
+    </header>
+  </section>
+
+  <section role="region">
+    <header>
+      <menu type="toolbar">
+        <a href="#"><span class="icon icon-edit">edit</span></a>
+        <a href="#"><span class="icon icon-add">add</span></a>
+      </menu>
+      <h1>Long Long Messages</h1>
+    </header>
+  </section>
+
+  <section role="region">
+    <header>
+      <menu type="toolbar">
+        <a href="#"><span class="icon icon-edit">edit</span></a>
+        <a href="#"><span class="icon icon-add">add</span></a>
+      </menu>
+      <h1>Long Long Long Messages</h1>
+    </header>
+  </section>
+
+  <div>Navigation &amp; Actions</div>
+
+  <section role="region">
+    <header>
+      <a href="#"><span class="icon icon-back">back</span></a>
+      <menu type="toolbar">
+        <a href="#"><span class="icon icon-edit">edit</span></a>
+        <a href="#"><span class="icon icon-add">add</span></a>
+      </menu>
+      <h1>Messages</h1>
+    </header>
+  </section>
+
+  <section role="region">
+    <header>
+      <a href="#"><span class="icon icon-back">back</span></a>
+      <menu type="toolbar">
+        <a href="#"><span class="icon icon-edit">edit</span></a>
+        <a href="#"><span class="icon icon-add">add</span></a>
+      </menu>
+      <h1>Long Messages</h1>
+    </header>
+  </section>
+
+  <section role="region">
+    <header>
+      <a href="#"><span class="icon icon-back">back</span></a>
+      <menu type="toolbar">
+        <a href="#"><span class="icon icon-edit">edit</span></a>
+        <a href="#"><span class="icon icon-add">add</span></a>
+      </menu>
+      <h1>Long Long Messages</h1>
+    </header>
+  </section>
+
+  <section role="region">
+    <header>
+      <a href="#"><span class="icon icon-back">back</span></a>
+      <menu type="toolbar">
+        <a href="#"><span class="icon icon-edit">edit</span></a>
+        <a href="#"><span class="icon icon-add">add</span></a>
+      </menu>
+      <h1>Long Long Long Messages</h1>
+    </header>
+  </section>
+
+<script>
+
+  document.body.onresize= function(){
+    centerHeader()
+  }
+
+  centerHeader()
+
+  function centerHeader(){
+    var headers = document.querySelectorAll('section > header:first-child');
+
+    var dir = document.dir;
+
+    for(i = 0; i < headers.length; i++) {
+
+      var headerHalfWidth = headers[i].offsetWidth / 2;
+
+      var title = headers[i].querySelector('h1');
+      var menu = headers[i].querySelector('menu');
+      var button = headers[i].querySelectorAll(":scope > a")[0];
+
+      title.style = '';
+      title.classList.remove('after-js');
+
+      if (title && menu) {
+
+        var titleHalfWidth = title.offsetWidth / 2;
+        var menuWidth = menu.offsetWidth;
+
+        if ( headerHalfWidth - menuWidth < titleHalfWidth) {
+          if (button) {
+            if (dir == 'ltr') {
+              title.style.paddingLeft = button.offsetWidth + 'px';
+            } else {
+              title.style.paddingRight = button.offsetWidth + 'px';
+            }
+          }
+          if (menu) {
+            if (dir == 'ltr') {
+              title.style.paddingRight = menuWidth + 'px';
+            } else {
+              title.style.paddingLeft = menuWidth + 'px';
+            }
+
+            title.style.textAlign = 'right';
+          }
+        }
+      }
+
+      if (button && !menu) {
+        var buttonWidth = button.offsetWidth;
+        var titleHalfWidth = title.offsetWidth / 2;
+
+        if ( headerHalfWidth - buttonWidth < titleHalfWidth) {
+          if (dir == 'ltr') {
+            title.style.paddingLeft = button.offsetWidth + 'px';
+          } else {
+            title.style.paddingRight = button.offsetWidth + 'px';
+          }
+        }
+      }
+
+      if (title) {
+        title.classList.add('after-js');
+      }
+    }
+  }
+</script>
+
+</body>
+</html>
