@@ -159,13 +159,18 @@
           // Stop refreshing the clock when the screen is turned off.
           this.clock.stop();
         } else {
-          this._passCodeTimeoutCheck = this.checkPassCodeTimeout();
+          var _screenOffInterval = new Date().getTime() - this._screenOffTime;
+          if (_screenOffInterval > this.passCodeRequestTimeout * 1000) {
+            this._passCodeTimeoutCheck = true;
+          } else {
+            this._passCodeTimeoutCheck = false;
+          }
 
           // Resume refreshing the clock when the screen is turned on.
           this.clock.start(this.refreshClock.bind(this));
 
           // Show the unlock keypad immediately
-          if (this.passCodeEnabled && this.checkPassCodeTimeout()) {
+          if (this.passCodeEnabled && this._passCodeTimeoutCheck) {
             this.switchPanel('passcode');
           }
         }
@@ -370,6 +375,13 @@
         this.setEnabled(value);
     }).bind(this));
 
+    window.SettingsListener.observe('lockscreen.lock-immediately', false,
+      (function(value) {
+        if (value === true) {
+          this.lockIfEnabled(value);
+        }
+    }).bind(this));
+
     var wallpaperURL = new window.SettingsURL();
 
     window.SettingsListener.observe('wallpaper.image',
@@ -397,6 +409,11 @@
     window.SettingsListener.observe('lockscreen.passcode-lock.timeout',
       0, (function(value) {
       this.passCodeRequestTimeout = value;
+    }).bind(this));
+
+    window.SettingsListener.observe('lockscreen.lock-message',
+      '', (function(value) {
+      this.setLockMessage(value);
     }).bind(this));
     navigator.mozL10n.ready(this.l10nInit.bind(this));
   };
@@ -470,6 +487,12 @@
     }
   };
 
+  LockScreen.prototype.setLockMessage =
+  function ls_setLockMessage(val) {
+    this.message.textContent = val;
+    this.message.hidden = (val === '');
+  },
+
   /**
    * Light the camera and unlocking icons when user touch on our LockScreen.
    *
@@ -509,7 +532,7 @@
    */
   LockScreen.prototype._activateCamera =
   function ls_activateCamera() {
-    var panelOrFullApp = (function() {
+    var panelOrFullApp = () => {
       // If the passcode is enabled and it has a timeout which has passed
       // switch to secure camera
       if (this.passCodeEnabled && this._passCodeTimeoutCheck) {
@@ -528,20 +551,29 @@
       a.onerror = function ls_activityError() {
         console.log('MozActivity: camera launch error.');
       };
-    }).bind(this);
+    };
 
     panelOrFullApp();
   };
 
   LockScreen.prototype._activateUnlock =
   function ls_activateUnlock() {
-    var passcodeOrUnlock = (function() {
-      if (this.passCodeEnabled && this.checkPassCodeTimeout()) {
+    var passcodeOrUnlock = () => {
+      if (this.passCodeEnabled) {
+        if (0 === this.passCodeRequestTimeout) {
+          // If the user didn't set any valid timeout.
           this.switchPanel('passcode');
+        } else if (this._passCodeTimeoutCheck) {
+          // Or the timeout expired (so should lock it).
+          this.switchPanel('passcode');
+        } else {
+          // Otherwise, user set a timeout but it didn't expire yet.
+          this.unlock();
+        }
       } else {
         this.unlock();
       }
-    }).bind(this);
+    };
     passcodeOrUnlock();
   };
 
@@ -762,10 +794,10 @@
       case 'main':
       /* falls through */
       default:
-        var unload = (function() {
+        var unload = () => {
           this.overlay.classList.remove('triggered');
           clearTimeout(this.triggeredTimeoutId);
-        }).bind(this);
+        };
 
         if (toPanel !== 'camera') {
           unload();
@@ -812,14 +844,14 @@
     }
 
     this._switchingPanel = true;
-    this.loadPanel(panel, (function() {
+    this.loadPanel(panel, () => {
       this.unloadPanel(overlay.dataset.panel, panel,
-        (function() {
+        () => {
           this.dispatchEvent('lockpanelchange', { 'panel': panel });
           overlay.dataset.panel = panel;
           this._switchingPanel = false;
-        }).bind(this));
-    }).bind(this));
+        });
+    });
   };
 
   LockScreen.prototype.refreshClock =
@@ -871,10 +903,10 @@
       this.kPassCodeErrorTimeout = 500;
       this.kPassCodeErrorCounter = 0;
 
-      var transitionend = (function() {
+      var transitionend = () => {
         this.passcodeCode.removeEventListener('transitionend', transitionend);
         this.unlock();
-      }).bind(this);
+      };
       this.passcodeCode.addEventListener('transitionend', transitionend);
     } else {
       this.overlay.dataset.passcodeStatus = 'error';
@@ -887,11 +919,11 @@
         navigator.vibrate([50, 50, 50]);
       }
 
-      setTimeout((function() {
+      setTimeout(() => {
         delete this.overlay.dataset.passcodeStatus;
         this.passCodeEntered = '';
         this.updatePassCodeUI();
-      }).bind(this), this.kPassCodeErrorTimeout);
+      }, this.kPassCodeErrorTimeout);
     }
   };
 
@@ -916,7 +948,7 @@
         'area-handle', 'area-slide', 'media-container', 'passcode-code',
         'alt-camera', 'alt-camera-button', 'slide-handle',
         'passcode-pad', 'camera', 'accessibility-camera',
-        'accessibility-unlock', 'panel-emergency-call', 'canvas'];
+        'accessibility-unlock', 'panel-emergency-call', 'canvas', 'message'];
 
     var toCamelCase = function toCamelCase(str) {
       return str.replace(/\-(.)/g, function replacer(str, p1) {
@@ -981,34 +1013,15 @@
     this.initUnlockerEvents();
   };
 
-  /**
-   * Check if the timeout has been expired and we need to check the passcode.
-   */
-  LockScreen.prototype.checkPassCodeTimeout =
-    function ls_checkPassCodeTimeout() {
-      var _screenOffInterval = new Date().getTime() - this._screenOffTime;
-      // If user set timeout, then
-      // - if timeout expired, do check
-      // - if timeout is valid, do not check
-      if (0 !== this.passCodeRequestTimeout) {
-        if (_screenOffInterval > this.passCodeRequestTimeout * 1000) {
-          return true;
-        } else {
-          return false;
-        }
-      } else {
-        return true;
-      }
-    };
-
   /** @exports LockScreen */
   exports.LockScreen = LockScreen;
 
-  // XXX: Before we stop components directly reading this value,
-  // we need this to satisfy those components which would be loaded
-  // before this file.
-  if (!window.lockScreen) {
-    /** @global*/
-    window.lockScreen = { locked: false };
-  }
+  // XXX: Before we make a reasonable way to register
+  // global names before 'load' event, to satisfy some
+  // requests from the components like AppWindowManager,
+  // we must do this to register global names before we
+  // got loaded.
+
+  /** @global*/
+  window.lockScreen = new LockScreen();
 })(window);
