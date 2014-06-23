@@ -1,6 +1,6 @@
 
 #composer-container {
-  position: relative
+  position: relative;
 }
 
 /*
@@ -11,12 +11,10 @@
  */
 
 .flex-composer {
-  display: flex;
   flex-direction: column;
-
-  height: 100%;
+  display: flex;
   top: 0;
-
+  height: 100%;
   overflow: hidden;
 }
 
@@ -26,7 +24,6 @@
                /* In Bug 1015841 this should be able to change depending on the
                 * recipients panel height
                 * Should the recipients panel be part of the composer ? */
-
   height: calc(100% - 5.5rem);
 }
 
@@ -59,20 +56,72 @@
 }
 
 #messages-compose-form {
-  display: flex;
-  flex-direction: row;
-
-  min-height: 3rem;
   height: auto; /* overrides building blocks */
-
+  min-height: 3rem;
+  /*max-height: 20.4rem;*/
   background-color: #fff;
 }
 
 /* Overwrite. No more fixed height */
-form[role="search"] p input,
-form[role="search"] p textarea,
-form[role="search"] button[type="submit"] + p > textarea {
+form[role='search'] p input,
+form[role='search'] p textarea,
+form[role='search'] button[type='submit'] + p > textarea {
   height: auto;
+}
+
+/* Overwrite BB because of the previous rule */
+form[role='search'] button[type='submit']:after {
+  content: '';
+  background: none;
+}
+
+#messages-container {
+  height: 100%;
+  overflow: auto;
+}
+
+/* Composer */
+
+.composer-subject-container {
+  position: relative;
+  padding: 0 6.5rem 0 1.5rem;
+}
+
+.composer-message-container {
+  display: flex;
+  position: relative;
+  align-items: flex-end;
+}
+
+#messages-subject-input {
+  box-sizing: border-box;
+  display: none;
+  position: relative;
+  min-height: 2.5rem;
+  max-height: 4.5rem;
+  padding: .6rem 0;
+  color: #0b6262;
+  font-size: 1.7rem;
+  line-height: 1.7rem;
+  text-align: left;
+  overflow: auto;
+}
+
+#messages-compose-form.subject-input-visible #messages-subject-input {
+  display: block;
+}
+
+#messages-subject-input:after {
+  position: absolute;
+  top: .6rem;
+  color: #00adad;
+  font-weight: normal;
+  font-style: italic;
+  pointer-events: none;
+}
+
+#messages-subject-input.placeholder:after {
+  content: attr(data-placeholder);
 }
 
 /*
@@ -81,111 +130,133 @@ form[role="search"] button[type="submit"] + p > textarea {
  */
 
 #messages-input {
-  position: relative; /* to position its generated content */
-
-  min-height: 4rem;
-  padding: 1.2rem 0.5rem 0.5rem 0;
   box-sizing: border-box;
-
+  flex: 1 1 auto;
+  position: relative; /* to position its generated content */
+  min-height: 3rem;
+  max-height: 32.2rem;
+  margin-left: 1.5rem;
+  padding: .9rem .5rem .5rem 0;
+  color: #474747;
+  font-size: 1.7rem;
+  line-height: 2.3rem;
   text-align: left;
-  font-size: 1.8rem;
-  line-height: 2rem;
+  border-top: .1rem solid transparent;
+  overflow: auto;
+}
+
+#messages-input:focus {
+  max-height: 6.5rem;
+}
+
+#messages-compose-form.subject-input-visible #messages-input {
+  border-color: #9ef2e7;
 }
 
 /* Border right for message input: the border needs to grow with the content,
  * that's why it's defined in the message input instead of the button. */
 /* Could be revisited in bug 1013296. */
 #messages-input:before {
-  content: "";
+  content: '';
   position: absolute;
-  top: 1rem;
+  top: .7rem;
   right: 0;
-  bottom: 0.6rem;
-
-  width: 0.1rem;
-  display: block;
-
+  bottom: .7rem;
+  width: .1rem;
   background-color: #eaeae7;
-}
-
-/* Overwrite BB because of the previous rule */
-form[role="search"] button[type="submit"]:after {
-    content: "";
-    background: none;
-}
-
-#messages-input.placeholder:after{
-  position: absolute;
-  top: 1.2rem;
-  left: 0;
-  pointer-events: none;
-
-  color: #888;
-}
-
-#messages-subject-input {
-  position: relative;
-
-  box-sizing: border-box;
-  min-height: 2.5rem;
-  max-height: 4.5rem;
-  padding: 0.8rem 0.5rem 0.3rem 0;
-  line-height: 1.7rem;
-  border-bottom: 0.1rem solid #9ef2e7;
-
-  font-size: 1.7rem;
-  text-align: left;
-  color: #0b6262;
-  overflow: auto;
-}
-
-#messages-subject-input:after {
-  position: absolute;
-  top: 0.8rem;
-
-  pointer-events: none;
-  font-style: italic;
-  font-weight: normal;
-  color: #00adad;
 }
 
 #messages-input.placeholder:after {
   content: attr(data-placeholder);
+  position: absolute;
+  top: .8rem;
+  left: 0;
+  color: #9b9b9b;
   font-style: italic;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
-#messages-subject-input.placeholder:after {
-  content: attr(data-placeholder);
-}
-
-#messages-container {
-  height: 100%;
-  overflow: auto;
-}
-
-/*
- * 'message-complete' contains Subject & Body
- */
-.composer-message-complete {
-  flex: auto;
-  min-height: 4rem;
-
-  margin-left: 1.5rem;
-  overflow: auto;
-}
-
-.composer-button-container {
-  display: flex;
-
-  flex: none;
+.col-container {
   flex-direction: column;
-  justify-content: flex-end;
+  display: flex;
+  min-width: 6.6rem;
+  max-width: 8.5rem;
+  justify-content: space-between;
+  align-self: stretch;
+}
 
-  -moz-user-select: none; /* without this, tapping on the element selects its content */
+#messages-counter-label {
+  visibility: hidden;
+  position: relative;
+  right: 1.5rem;
+  bottom: -.1rem;
+  left: 0;
+  width: calc(100% - 3rem);
+  height: 0;
+  color: #575757;
+  font-size: 0;
+  text-align: left;
+  align-self: flex-start;
+}
+
+#messages-counter-label.has-counter[data-message-type='sms'] {
+  visibility: visible;
+}
+
+#messages-compose-form[data-message-type='mms'] #messages-counter-label {
+  height: auto;
+  padding: .2rem 0 .1rem 1.5rem;
+  font-size: 1.4rem;
+}
+
+#messages-compose-form[data-message-type='mms'].subject-input-visible #messages-counter-label {
+  margin-top: -3rem;
+  padding-top: .6rem;
+  border-bottom: .1rem solid #9ef2e7;
+}
+
+#messages-counter-label:after {
+  content: attr(data-counter);
+  position: absolute;
+  top: 0;
+  left: 1.5rem;
+  padding-top: .2rem;
+  color: #575757;
+  font-size: 1.4rem;
+  text-align: left;
+}
+
+#messages-compose-form[data-message-type='mms'] #messages-counter-label:after {
+  top: 2rem;
+}
+
+#messages-compose-form[data-message-type='mms'].subject-input-visible #messages-counter-label:after {
+  top: calc(100% + .1rem);
 }
 
 #messages-send-button {
-  overflow: visible;
+  min-width: initial;
+  margin: 0 1.5rem;
+  padding: .2rem 0 0 0;
+  -moz-user-select: none;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: #fff;
+  overflow: hidden;
+}
+
+#messages-send-button:after {
+  content: attr(data-counter);
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: inherit;
+  padding-top: .2rem;
+  color: #575757;
+  font-size: 1.4rem;
+  text-align: left;
 }
 
 #messages-send-button.active {
@@ -194,34 +265,4 @@ form[role="search"] button[type="submit"]:after {
 
 #messages-input.ignoreEvents {
   pointer-events: none;
-}
-
-#messages-send-button.has-counter:before {
-  content: attr(data-counter);
-
-  position: absolute;
-  left: 0;
-  top: -1.9rem;
-
-  box-sizing: border-box;
-  height: 1.8rem;
-  padding: 0 0.5rem;
-
-  color: rgb(133, 133, 133);
-  font-weight: normal;
-  font-size: 1.4rem;
-  text-align: left;
-  line-height: 1.8rem;
-}
-
-[data-message-type="mms"] #messages-send-button.has-counter:before {
-  content: "MMS";
-
-  padding-left: calc(100% - 5rem);
-  margin-top: -1.2rem;
-
-  line-height: 1rem;
-  font-size: 1.4rem;
-  font-style: normal;
-  color: #575757;
 }
