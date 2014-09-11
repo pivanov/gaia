@@ -662,7 +662,8 @@ var Compose = (function() {
       state.type = 'sms';
       this.onTypeChange();
 
-      dom.message.innerHTML = '<br>';
+      dom.message.innerHTML =
+        '<i class="smile1"></i><i class="smile2"></i> <br />';
       subject.clear().hide();
       state.resizing = false;
       state.size = 0;

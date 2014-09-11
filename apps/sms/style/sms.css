@@ -8,6 +8,25 @@ html, body {
   overflow-y: hidden !important;
 }
 
+@font-face {
+  font-family: 'mozemoji';
+  src:url('../style/mozemoji.ttf') format('truetype');
+}
+#messages-input i {
+  font-style: normal;
+  font-family: 'mozemoji';
+  -moz-osx-font-smoothing: grayscale;
+  vertical-align: middle;
+  pointer-events: none;
+  margin: 0 0.2rem;
+}
+
+.smile1:before {
+  content: '\1f60B';
+}
+.smile2:before {
+  content: '\1F600';
+}
 
 /*
   Override BB. Some CSS tweaks for having a better confirm readability
