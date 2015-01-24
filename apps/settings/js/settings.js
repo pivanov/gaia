@@ -315,6 +315,27 @@ var Settings = {
         }
       });
     }
+  },
+
+  loadPanelStylesheetsIfNeeded: function settings_loadPanelStylesheetsIN() {
+    var self = this;
+    if (self._panelStylesheetsLoaded) {
+      return;
+    }
+
+    LazyLoader.load(['shared/style/action_menu.css',
+                     'shared/style_unstable/buttons.css',
+                     'shared/style/confirm.css',
+                     'shared/style_unstable/input_areas.css',
+                     'shared/style/progress_activity.css',
+                     'style/apps.css',
+                     'style/phone_lock.css',
+                     'style/simcard.css',
+                     'style/updates.css',
+                     'style/downloads.css'],
+    function callback() {
+      self._panelStylesheetsLoaded = true;
+    });
   }
 };
 
