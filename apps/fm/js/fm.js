@@ -1,5 +1,7 @@
 'use strict';
 
+var eRTGroup = 31;
+
 function $(id) {
   return document.getElementById(id);
 }
@@ -156,6 +158,7 @@ var mozFMRadio = navigator.mozFM || navigator.mozFMRadio || {
 })(window);
 
 function updateFreqUI() {
+  eRTGroup = 31;
   historyList.add(mozFMRadio.frequency);
   frequencyDialer.setFrequency(mozFMRadio.frequency);
   var frequency = frequencyDialer.getFrequency();
@@ -593,17 +596,12 @@ var favoritesList = {
         return;
       }
 
-      if (event.target.classList.contains('fav-list-remove-button')) {
-        // Remove the item from the favorites list.
-        self.remove(frequency);
-        updateFreqUI();
+
+      if (mozFMRadio.enabled) {
+        cancelSeekAndSetFreq(frequency);
       } else {
-        if (mozFMRadio.enabled) {
-          cancelSeekAndSetFreq(frequency);
-        } else {
-          // If fm is disabled, turn the radio on.
-          enableFMRadio(frequency);
-        }
+        // If fm is disabled, turn the radio on.
+        enableFMRadio(frequency);
       }
     });
   },
@@ -626,10 +624,10 @@ var favoritesList = {
     elem.className = 'fav-list-item';
     elem.setAttribute('role', 'option');
     var html = '';
+    html += '<div class="fav-station-name">Test Radio Station</div>';
     html += '<div class="fav-list-frequency">';
     html += item.frequency.toFixed(1);
     html += '</div>';
-    html += '<div class="fav-list-remove-button"></div>';
     elem.innerHTML = html;
 
     // keep list ascending sorted
@@ -727,7 +725,7 @@ var favoritesList = {
   },
 
   select: function(freq) {
-    var items = $$('#fav-list-container div.fav-list-item');
+    var items = $$('#fav-list-container .fav-list-item');
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       if (this._getElemFreq(item) == freq) {
@@ -758,6 +756,10 @@ function init() {
 
       request.onsuccess = function seek_onsuccess() {
         powerSwitch.removeAttribute('data-seeking');
+      };
+
+      request.onrdsenabled = function rds() {
+        console.log(this);
       };
 
       request.onerror = function seek_onerror() {
@@ -831,6 +833,81 @@ function init() {
       window._previousEnablingState = enabling;
       mozFMRadio.disable();
     }
+  };
+
+  mozFMRadio.onrdsenabled = function onRDSEnable() {
+    $('rdsstatus').textContent = 'RDS ENABLED';
+  };
+
+  mozFMRadio.onrdsdisabled = function onRDSDisable() {
+    $('rdsstatus').textContent = 'RDS DISABLED';
+  };
+
+  mozFMRadio.onpichange = function onPICodeChange() {
+    $('picode').textContent = mozFMRadio.pi;
+  };
+
+  mozFMRadio.onpschange = function onPSNameChange() {
+    $('psname').textContent = mozFMRadio.ps;
+  };
+
+  mozFMRadio.onrtchange = function onRadiotextChange() {
+    $('radiotext').textContent = mozFMRadio.rt;
+  };
+
+  mozFMRadio.rdsGroupMask = 0xFFFFFFFF;
+  mozFMRadio.enableRDS();
+
+  function ParseRTPlusTag(typeidx, startidx, length) {
+    var type = ['Dummy', 'Title', 'Album', 'Track Number',
+                'Artist', 'Composition', 'Movement',
+                'Conductor', 'Composer', 'Band',
+                'Comment', 'Genre', 'News', 'Local News',
+                'Stock Market', 'Sport', 'Lottery',
+                'Horoscope', 'Daily Diversion',
+                'Health', 'Event', 'Scene', 'Cinema',
+                'TV', 'Date Time', 'Weather', 'Traffic',
+                'Alarm', 'Advertisement', 'URL', 'Other',
+                'Station Name', 'Station Description'];
+
+    $('rtplus').textContent +=
+      '|' + typeidx + '|' + startidx + '|' + length + '| ';
+    $('rtplus').textContent += type[typeidx];
+    $('rtplus').textContent += ' - ';
+    $('rtplus').textContent +=
+      mozFMRadio.rt.slice(startidx, startidx + length + 1);
+    $('rtplus').textContent += '; ';
+  };
+
+  mozFMRadio.onnewrdsgroup = function onNewRDSGroup() {
+    var group = mozFMRadio.rdsgroup;
+    var grouptype = (group[1] >> 11) & 0x1F;
+    console.log('group ' + grouptype);
+    if (grouptype == eRTGroup) {
+      var tag1 = ((group[1] & 0x7) << 15) | (group[2] >> 1);
+      var tag2 = ((group[2] & 0x1) << 16) | group[3];
+      var running = (group[1] & 8) ? 'Running' : 'Not Running';
+
+      if (tag1 == 0 && tag2 == 0)
+        return;
+
+      if (!(group[1] & 8))
+        return;
+      $('rtplus').textContent = 'RT+ ' + running + ' - ';
+
+      ParseRTPlusTag(tag1 >> 12, (tag1 >> 6) & 0x3F, tag1 & 0x3F);
+      ParseRTPlusTag(tag2 >> 11, (tag2 >> 5) & 0x3F, tag2 & 0x1F);
+    } else if (grouptype != (3 << 1))
+      return;
+
+    var groupcode = group[1] & 0x1F;
+    var aid = group[3] & 0xFFFF;
+    $('opendata').textContent =
+      'Group code ' + (groupcode >> 1) + ' aid ' + aid;
+    if (aid == 0x4BD7)
+      eRTGroup = groupcode;
+
+
   };
 
   // Disable the power button and the fav list when the airplane mode is on.
