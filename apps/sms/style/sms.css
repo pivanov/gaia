@@ -8,6 +8,19 @@ html, body {
   overflow-y: hidden !important;
 }
 
+@font-face {
+  font-family: "emojis";
+  src: url("../../../shared/elements/gaia-icons/fonts/emojis.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+.body-text,
+.composer-message-input-container,
+.message p.message-content-body {
+  font-family: "emojis";
+  /*line-height: 1;*/
+}
 
 /* Style for the attachment options menu, mimics style for shared
  * options menu element.

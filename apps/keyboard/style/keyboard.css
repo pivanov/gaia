@@ -918,8 +918,15 @@ bubble above the key when you tap and hold. */
   }
 }
 
+@font-face {
+  font-family: "emojis";
+  src: url("../../../shared/elements/gaia-icons/fonts/emojis.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
 .emoji {
-  font-family: sans-serif;
+  font-family: "emojis";
   border: none;
   background: none;
   font-size: 3rem;
