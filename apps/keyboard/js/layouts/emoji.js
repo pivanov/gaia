@@ -475,13 +475,7 @@ Keyboards.emoji = {
       ]
     ]
     }, {     // Page 4 - Symbols
-    panelKeys: [{ compositeKey: '3', type: 'emoji' }, { compositeKey: '0', type: 'emoji' },
-                { compositeKey: '1', type: 'emoji' }, { compositeKey: '2', type: 'emoji' },
-                { compositeKey: '3', type: 'emoji' }, { compositeKey: '4', type: 'emoji' },
-                { compositeKey: '5', type: 'emoji' }, { compositeKey: '6', type: 'emoji' },
-                { compositeKey: '7', type: 'emoji' }, { compositeKey: '8', type: 'emoji' },
-                { compositeKey: '9', type: 'emoji' }, { compositeKey: '©', type: 'emoji' },
-                { compositeKey: '🅰', type: 'emoji' }, { compositeKey: '🅱', type: 'emoji' },
+    panelKeys: [{ compositeKey: '🅰', type: 'emoji' }, { compositeKey: '🅱', type: 'emoji' },
                 { compositeKey: '🅾', type: 'emoji' }, { compositeKey: '🅿', type: 'emoji' },
                 { compositeKey: '🆎', type: 'emoji' }, { compositeKey: '🆑', type: 'emoji' },
                 { compositeKey: '🆒', type: 'emoji' }, { compositeKey: '🆓', type: 'emoji' },
